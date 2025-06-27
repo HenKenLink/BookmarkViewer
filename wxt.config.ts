@@ -1,0 +1,27 @@
+import { defineConfig } from "wxt";
+
+// See https://wxt.dev/api/config.html
+export default defineConfig({
+  modules: ["@wxt-dev/module-react"],
+  vite: (configEnv) => ({
+    define: {
+      // __DEV__: configEnv.mode === "production" ? false : true,
+      __DEV__: true,
+      __CHROME__: false,
+    },
+  }),
+  manifest: {
+    action: {
+      default_icon: "/icon/48.png",
+    },
+    permissions: [
+      "storage",
+      "tabs",
+      "bookmarks",
+      "scripting",
+      "activeTab",
+      "downloads",
+    ],
+    host_permissions: ["<all_urls>"],
+  },
+});
