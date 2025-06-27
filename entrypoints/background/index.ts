@@ -6,7 +6,7 @@ import {
 } from "../global/test";
 import { MatchedUrl } from "../global/types";
 
-import { waitForTabLoad } from "../global/utils/index";
+import { waitForTabLoad, filterUnloadPageUrl } from "../global/globalUtils";
 
 type Thumb = {
   pageUrl: string;
@@ -26,6 +26,12 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     for (const url of matchedUrlList) {
       console.log("Start to get thumb!");
       const pageUrlList = url.pageUrlList;
+      const unloadPageUrl: string[] = filterUnloadPageUrl(pageUrlList);
+      console.log("unloadPageUrl", unloadPageUrl);
+      if (!unloadPageUrl) {
+        console.log("");
+        continue;
+      }
       const hostname = url.hostname;
       const tabUrl = `https://${hostname}`;
       console.log("Hostname to open: ", hostname);
@@ -38,7 +44,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       const res = await browser.scripting.executeScript({
         target: { tabId },
         func: dynamicExecutor,
-        args: [code, pageUrlList],
+        args: [code, unloadPageUrl],
       });
       let thumbList: Thumb[];
       if (res && res[0].result) {
@@ -55,6 +61,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       await browser.tabs.remove(tabId);
     }
   }
+  browser.runtime.sendMessage({ type: messageId.getThumbfinished });
 });
 
 const openUI = async () => {

@@ -8,19 +8,10 @@ import { BookmarkTreeNode, MatchedUrl } from "../global/types";
 type StoredImage = { pageUrl: string; blobUrl: string };
 
 async function startGetThumb(matchedUrlList: MatchedUrl[]): Promise<void> {
-  // const tab = await browser.tabs.create({
-  //   url: openUrl,
-  //   active: false,
-  // });
-  // // await waitForTabLoad(tab.id!);
   browser.runtime.sendMessage({
     type: messageId.getThumb,
     matchedUrlList: matchedUrlList,
   });
-  // browser.tabs.sendMessage(tab.id!, {
-  //   type: messageId.getThumb,
-  //   pageUrlList: pageUrlList,
-  // });
 }
 
 async function getStoredImages(pageUrlList: string[]): Promise<StoredImage[]> {
@@ -50,24 +41,37 @@ async function getStoredImages(pageUrlList: string[]): Promise<StoredImage[]> {
 
 export default function App() {
   useLoadBookmarks();
+
   const bookmarkList = useStore((state) => state.bookmarkList);
   const matchBookmarks = useStore((state) => state.matchBookmarks);
-  useEffect(() => console.log("bookmarkList", bookmarkList), [bookmarkList]);
+
+  const loadedImageList = useStore((state) => state.loadedImageList);
+
   // const [imageList, setImageList] = useState<StoredImage[]>([]);
-  const [imageList, setImageList] = useState<StoredImage[]>([]);
-  const imageListRef = useRef<StoredImage[]>([]);
+  // const imageListRef = useRef<StoredImage[]>([]);
+
+  // useEffect(() => {
+  //   imageListRef.current = imageList;
+  // }, [imageList]);
 
   const [matchedUrlList, setMatchedUrlList] = useState<MatchedUrl[]>([]);
 
-  useEffect(() => {
-    imageListRef.current = imageList;
-  }, [imageList]);
-
-  useEffect(() => {
-    const matchRes = matchBookmarks(testHostnameList);
+  const updateMatchedUrlList = async () => {
+    const matchRes = await matchBookmarks(testHostnameList);
     setMatchedUrlList(matchRes);
     console.log("matchedUrlList: ", matchedUrlList);
+  };
+
+  useEffect(() => {
+    console.log("bookmarkList", bookmarkList);
+    updateMatchedUrlList();
   }, [bookmarkList]);
+
+  const onMessageListener = async (message: any) => {
+    if (message.type == messageId.getThumbfinished) {
+      updateMatchedUrlList();
+    }
+  };
 
   useEffect(() => {
     // const init = async () => {
@@ -81,38 +85,39 @@ export default function App() {
     //   // setImageList(storedImageList);
     // };
     // init();
-    const listener = async (changes: any) => {
-      console.log("Storage changed items: ", changes);
-      const currentImageList = imageListRef.current;
-      // 复制 current imageList 数据
-      let newImageList = currentImageList.map((item) => ({
-        ...item,
-      }));
-      const changedkeys = Object.keys(changes);
-      let resImages: StoredImage[] = await getStoredImages(changedkeys);
-      for (const newImage of resImages) {
-        // 查找重复项index
-        const index = newImageList.findIndex(
-          (img) => img.pageUrl === newImage.pageUrl
-        );
-        if (index !== -1) {
-          // 释放原blobUrl
-          URL.revokeObjectURL(newImageList[index].blobUrl);
-          newImageList[index].blobUrl = newImage.blobUrl;
-        } else {
-          newImageList.push(newImage);
-        }
-      }
-      setImageList(newImageList);
-    };
-    browser.storage.local.onChanged.addListener(listener);
-    return () => {
-      browser.storage.local.onChanged.removeListener(listener);
-      for (const image of imageListRef.current) {
-        URL.revokeObjectURL(image.blobUrl);
-      }
-      setImageList([]);
-    };
+    // const listener = async (changes: any) => {
+    //   console.log("Storage changed items: ", changes);
+    //   const currentImageList = imageListRef.current;
+    //   // 复制 current imageList 数据
+    //   let newImageList = currentImageList.map((item) => ({
+    //     ...item,
+    //   }));
+    //   const changedkeys = Object.keys(changes);
+    //   let resImages: StoredImage[] = await getStoredImages(changedkeys);
+    //   for (const newImage of resImages) {
+    //     // 查找重复项index
+    //     const index = newImageList.findIndex(
+    //       (img) => img.pageUrl === newImage.pageUrl
+    //     );
+    //     if (index !== -1) {
+    //       // 释放原blobUrl
+    //       URL.revokeObjectURL(newImageList[index].blobUrl);
+    //       newImageList[index].blobUrl = newImage.blobUrl;
+    //     } else {
+    //       newImageList.push(newImage);
+    //     }
+    //   }
+    //   setImageList(newImageList);
+    // };
+    // browser.storage.local.onChanged.addListener(listener);
+    // return () => {
+    //   browser.storage.local.onChanged.removeListener(listener);
+    //   for (const image of imageListRef.current) {
+    //     URL.revokeObjectURL(image.blobUrl);
+    //   }
+    //   setImageList([]);
+    // };
+    browser.runtime.onMessage.addListener(onMessageListener);
   }, []);
 
   return (
@@ -125,7 +130,7 @@ export default function App() {
         Open Tabs
       </button>
       <div style={{ display: "flex" }}>
-        {imageList.map((image, index) => {
+        {loadedImageList.map((image, index) => {
           const blobUrl = image.blobUrl;
           console.log("Mapping url, index: ", index, " BlobUrl: ", blobUrl);
           return <img key={index} src={image.blobUrl} alt={`img-${index}`} />;

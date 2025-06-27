@@ -1,12 +1,13 @@
 import { create, StateCreator } from "zustand";
 import { BookmarkTreeNode, MatchedUrl } from "../../global/types";
 // import { get } from "http";
-import {
-  filterBookmarkByHostname,
-  getBookmarksUrl,
-} from "../../global/utils/index";
+import { filterBookmarkByHostname, loadPageUrlFromBookmarks } from "../utils";
+
+import { PageUrl, LoadedImage } from "../../global/types";
 
 type BookmarkMap = Record<string, BookmarkTreeNode>;
+
+// export const loadedImageList: LoadedImage[] = [];
 
 type storeState = {
   // urlList: string[];
@@ -15,12 +16,14 @@ type storeState = {
   bookmarkMap: BookmarkMap;
   // matchedBookmarkList: BookmarkTreeNode[];
   matchedUrlList: MatchedUrl[];
+  loadedImageList: LoadedImage[];
 };
 
 type storeAction = {
   // setTabId: (newId: number | null) => void;
   loadBookmarkTree: () => Promise<void>;
-  matchBookmarks: (hostnameList: string[]) => MatchedUrl[];
+  matchBookmarks: (hostnameList: string[]) => Promise<MatchedUrl[]>;
+  updateLoadedImageList: (newLoadedImageList: LoadedImage[]) => void;
 };
 
 type Store = storeState & storeAction;
@@ -54,31 +57,39 @@ export const loadBookmarkTreeAction: StateCreator<
       bookmarkList: list,
     }));
   },
-  matchBookmarks: (hostnameList: string[]) => {
+  matchBookmarks: async (hostnameList: string[]) => {
     const matchedUrlList: MatchedUrl[] = [];
     const bookmarkList = get().bookmarkList;
     if (!bookmarkList) {
       throw new Error("BookmarkList is empty.");
     }
     console.log("MatchBookmarks get bookmarkList result: ", bookmarkList);
-    hostnameList.forEach((hostname) => {
+
+    for (const hostname of hostnameList) {
       const matchedBookmarkList = filterBookmarkByHostname(
         bookmarkList,
         hostname
       );
-      const pageUrlList = getBookmarksUrl(matchedBookmarkList);
+      const pageUrlList: PageUrl[] = await loadPageUrlFromBookmarks(
+        matchedBookmarkList
+      );
       const matchedUrl: MatchedUrl = {
         hostname: hostname,
         pageUrlList: pageUrlList,
       };
       matchedUrlList.push(matchedUrl);
-    });
+    }
 
     const res = {
       matchedUrlList: matchedUrlList,
     };
     set(() => res);
     return matchedUrlList;
+  },
+  updateLoadedImageList: (newLoadedImageList) => {
+    set((state) => ({
+      loadedImageList: [...state.loadedImageList, ...newLoadedImageList],
+    }));
   },
 });
 
@@ -88,5 +99,6 @@ export const useStore = create<Store>()((...action) => ({
   bookmarkMap: {} as BookmarkMap,
   // matchedBookmarkList: [] as BookmarkTreeNode[],
   matchedUrlList: [] as MatchedUrl[],
+  loadedImageList: [] as LoadedImage[],
   ...loadBookmarkTreeAction(...action),
 }));

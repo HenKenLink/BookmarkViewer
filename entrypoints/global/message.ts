@@ -1,4 +1,5 @@
 export enum messageId {
   getThumb = "getThumb",
-  thumbUrl = "thumbUrl"
+  thumbUrl = "thumbUrl",
+  getThumbfinished = "getThumbfinished",
 }
