@@ -1,12 +1,13 @@
 import { messageId } from "../global/message";
 import {
   testAddBookmarks,
-  testStorageScript,
-  testGetScript,
+  testStorageConfig,
+  // testGetScript,
 } from "../global/test";
-import { MatchedUrl } from "../global/types";
+import { MatchedUrl, UnstoredUrl } from "../global/types";
 
 import { waitForTabLoad, filterUnloadPageUrl } from "../global/globalUtils";
+import { useStore } from "../options/store";
 
 type Thumb = {
   pageUrl: string;
@@ -16,22 +17,19 @@ type Thumb = {
 browser.runtime.onMessage.addListener(async (message, sender) => {
   if (message.type === messageId.getThumb) {
     console.log("Message received!");
-    const matchedUrlList: MatchedUrl[] = message.matchedUrlList;
-    console.log("matchedUrlList: ", matchedUrlList);
-    // const tabId = message.tabId;
-    const code = await testGetScript();
+    const unStoredUrlList: UnstoredUrl[] = message.unStoredUrlList;
+    console.log("matchedUrlList: ", unStoredUrlList);
+    const code = "";
     // console.log("pageUrlList: ", pageUrlList);
-    console.log("code: ", code);
 
-    for (const url of matchedUrlList) {
+    for (const url of unStoredUrlList) {
       console.log("Start to get thumb!");
-      const pageUrlList = url.pageUrlList;
-      const unloadPageUrl: string[] = filterUnloadPageUrl(pageUrlList);
-      console.log("unloadPageUrl", unloadPageUrl);
-      if (!unloadPageUrl) {
-        console.log("");
-        continue;
-      }
+      const pageUrlList: string[] = url.pageUrlList;
+      const script = url.fetchScript;
+      console.log("fetchScript: ", script);
+
+      console.log("pageUrlList", pageUrlList);
+
       const hostname = url.hostname;
       const tabUrl = `https://${hostname}`;
       console.log("Hostname to open: ", hostname);
@@ -44,7 +42,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       const res = await browser.scripting.executeScript({
         target: { tabId },
         func: dynamicExecutor,
-        args: [code, unloadPageUrl],
+        args: [script, pageUrlList],
       });
       let thumbList: Thumb[];
       if (res && res[0].result) {
@@ -97,18 +95,18 @@ async function saveThumb(thumb: Thumb): Promise<void> {
   }
 }
 
-function dynamicExecutor(code: string, ...args: any[]): Function {
+function dynamicExecutor(script: string, ...args: any[]): Function {
   try {
     const func = new Function(
       "pageUrlList",
       "messageId",
       `return (async () => {
-      ${code}
+      ${script}
     })();`
     );
     return func(...args);
   } catch (e) {
-    console.error("Error executing dynamic code:", e);
+    console.error("Error executing dynamic script:", e);
     throw e;
   }
 }
@@ -117,7 +115,7 @@ export default defineBackground(async () => {
   if (__DEV__) {
     openUI();
     await testAddBookmarks();
-    await testStorageScript();
+    await testStorageConfig();
   }
 
   if (__CHROME__) {

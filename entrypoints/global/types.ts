@@ -1,9 +1,30 @@
 export type BookmarkTreeNode = Browser.bookmarks.BookmarkTreeNode;
 
-export type LoadedImage = { pageUrl: string; blobUrl: string };
+export type LoadedImage = {
+  bookmarkId: string;
+  pageUrl: string;
+  blobUrl: string;
+};
+
 export type PageUrl = { url: string; isLoaded: boolean };
 
 export type MatchedUrl = {
+  configId: number;
   hostname: string;
   pageUrlList: PageUrl[];
+  fetchScript: string;
+};
+
+export type UnstoredUrl = {
+  configId: number;
+  hostname: string;
+  pageUrlList: string[];
+  fetchScript: string;
+};
+
+export type FetchConfig = {
+  id: number;
+  hostname: string;
+  regexPattern?: string;
+  fetchScript: string;
 };

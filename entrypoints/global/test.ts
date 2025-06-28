@@ -1,4 +1,5 @@
 type CreateDetails = Browser.bookmarks.CreateDetails;
+import { FetchConfig } from "./types";
 
 // 添加parentId会报错
 const testBookmarkList: CreateDetails[] = [
@@ -29,7 +30,7 @@ const testBookmarkList: CreateDetails[] = [
   },
 ];
 
-export const testHostnameList = ["www.boyfriendtv.com"];
+// https://www.boyfriendtv.com/es/videos/1301842/bottom-takes-a-monstercock-in-her-big-ass/
 
 export async function testAddBookmarks() {
   for (const bk of testBookmarkList) {
@@ -37,7 +38,7 @@ export async function testAddBookmarks() {
   }
 }
 
-const code = `
+const fetchScript = `
 
 async function fetchHtml(url) {
   try {
@@ -122,13 +123,22 @@ async function main(pageUrlList) {
 return main(pageUrlList);
 `;
 
+export const testFetchConfList: FetchConfig[] = [
+  {
+    id: 1,
+    hostname: "www.boyfriendtv.com",
+    regexPattern:
+      "^https:\\/\\/www\\.boyfriendtv\\.com(?:\\/es)?\\/videos\\/.+",
+    fetchScript: fetchScript,
+  },
+];
+
 // const config = [{hostname:testHostname, script: }]
 
-export async function testStorageScript(): Promise<void> {
-  await browser.storage.local.set({ code: code });
+export async function testStorageConfig(): Promise<void> {
+  await browser.storage.local.set({ fetchConfigList: testFetchConfList });
 }
 
-export async function testGetScript(): Promise<string> {
-  const res = await browser.storage.local.get("code");
-  return res.code;
-}
+// export async function testGetConfig(): Promise<FetchConfig[]> {
+//   return await browser.storage.local.get("fetchConfigList");
+// }
