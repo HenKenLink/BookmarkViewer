@@ -39,7 +39,6 @@ export async function testAddBookmarks() {
 }
 
 const fetchScript = `
-
 async function fetchHtml(url) {
   try {
     const response = await fetch(url, {
@@ -83,7 +82,8 @@ function extractThumbUrl(html) {
 
   const scriptTag = doc.querySelector('script[type="application/ld+json"]');
   if (!scriptTag) {
-    throw new Error("Fail to get script tag.");
+    console.error("Fail to get script tag.");
+    return null;
   }
 
   let jsonData;
@@ -91,10 +91,12 @@ function extractThumbUrl(html) {
     try {
       jsonData = JSON.parse(scriptTag.textContent);
     } catch (e) {
-      throw new Error("Fail to parse json data.");
+      console.error("Fail to parse json data.");
+      return null;
     }
   } else {
-    throw new Error("Fail to get textContent from script tag.");
+    console.error("Fail to get textContent from script tag.");
+    return null;
   }
   // console.log("jsonData: ", jsonData);
 
@@ -108,7 +110,11 @@ async function fetchThumb(pageUrlList) {
   for (const pageUrl of pageUrlList) {
     const data = await fetchHtml(pageUrl);
     const thumbUrl = extractThumbUrl(data);
-    const thumb = {pageUrl: pageUrl, thumbUrl: thumbUrl}
+    if (!thumbUrl) {
+      console.log("Fail to get thumbUrl, continue.");
+      continue;
+    }
+    const thumb = { pageUrl: pageUrl, thumbUrl: thumbUrl };
     thumbList.push(thumb);
   }
   return thumbList;
@@ -141,4 +147,16 @@ export async function testStorageConfig(): Promise<void> {
 
 // export async function testGetConfig(): Promise<FetchConfig[]> {
 //   return await browser.storage.local.get("fetchConfigList");
+// }
+
+// call from console.
+// function testBlobUrl() {
+//   fetch(
+//     "blob:moz-extension://af68e598-f819-4879-928c-c7e68d969e53/6a81730a-933f-4f73-aaa4-9391a4f52785"
+//   )
+//     .then((res) => res.blob())
+//     .then((blob) => console.log("Valid blob url:", blob))
+//     .catch((err) =>
+//       console.error("Not valid blob url, url has been revoked:", err)
+//     );
 // }

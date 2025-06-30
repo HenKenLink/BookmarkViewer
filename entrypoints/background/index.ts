@@ -112,10 +112,11 @@ function dynamicExecutor(script: string, ...args: any[]): Function {
 }
 
 export default defineBackground(async () => {
+  await testStorageConfig();
+
   if (__DEV__) {
     openUI();
     await testAddBookmarks();
-    await testStorageConfig();
   }
 
   if (__CHROME__) {

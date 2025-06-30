@@ -52,6 +52,15 @@ export default function App() {
     };
     loadConfig();
     browser.runtime.onMessage.addListener(onMessageListener);
+
+    return () => {
+      loadedImageList.forEach((loadedImage) => {
+        const blobUrl: string = loadedImage.blobUrl;
+        if (blobUrl) {
+          URL.revokeObjectURL(blobUrl);
+        }
+      });
+    };
   }, []);
 
   useEffect(() => {
@@ -74,8 +83,6 @@ export default function App() {
     } else {
       return "";
     }
-
-    // if ()
   };
 
   return (

@@ -140,7 +140,8 @@ function extractThumbUrl(html) {
 
   const scriptTag = doc.querySelector('script[type="application/ld+json"]');
   if (!scriptTag) {
-    throw new Error("Fail to get script tag.");
+    console.error("Fail to get script tag.");
+    return null;
   }
 
   let jsonData;
@@ -148,10 +149,12 @@ function extractThumbUrl(html) {
     try {
       jsonData = JSON.parse(scriptTag.textContent);
     } catch (e) {
-      throw new Error("Fail to parse json data.");
+      console.error("Fail to parse json data.");
+      return null;
     }
   } else {
-    throw new Error("Fail to get textContent from script tag.");
+    console.error("Fail to get textContent from script tag.");
+    return null;
   }
   // console.log("jsonData: ", jsonData);
 
@@ -165,6 +168,10 @@ async function fetchThumb(pageUrlList) {
   for (const pageUrl of pageUrlList) {
     const data = await fetchHtml(pageUrl);
     const thumbUrl = extractThumbUrl(data);
+    if (!thumbUrl) {
+      console.log("Fail to get thumbUrl, continue.");
+      continue;
+    }
     const thumb = { pageUrl: pageUrl, thumbUrl: thumbUrl };
     thumbList.push(thumb);
   }

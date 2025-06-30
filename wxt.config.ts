@@ -11,6 +11,8 @@ export default defineConfig({
     },
   }),
   manifest: {
+    name: "Bookmark Viewer",
+    version: "0.0.1",
     action: {
       default_icon: "/icon/48.png",
     },
