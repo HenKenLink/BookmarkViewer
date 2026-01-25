@@ -24,7 +24,18 @@ export type UnstoredUrl = {
 
 export type FetchConfig = {
   id: number;
+
+  name: string;
   hostname: string;
   regexPattern?: string;
   fetchScript: string;
+};
+
+export type NavItem = {
+  name: string;
+  path: string;
+};
+
+export type Setting = {
+  darkMode: Boolean;
 };

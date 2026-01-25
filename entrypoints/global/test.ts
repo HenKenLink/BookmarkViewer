@@ -1,41 +1,54 @@
 type CreateDetails = Browser.bookmarks.CreateDetails;
 import { FetchConfig } from "./types";
+import { CONFIGS_KEY } from "../options/consts";
 
 // 添加parentId会报错
 const testBookmarkList: CreateDetails[] = [
+  // {
+  //   index: 1,
+  //   // parentId: "1",
+  //   title: "Horsecock and Slut - BoyFriendTV.com",
+  //   url: "https://www.boyfriendtv.com/videos/1277637/horsecock-and-slut/",
+  // },
   {
     index: 1,
     // parentId: "1",
-    title: "Horsecock and Slut - BoyFriendTV.com",
-    url: "https://www.boyfriendtv.com/videos/1277637/horsecock-and-slut/",
+    title: "Nickoles A & YarddieStyle iGayVideos.TV",
+    url: "https://www.igayvideos.tv/nickoles-a-yarddiestyle_2808271.html",
   },
-  {
-    index: 1,
-    // parentId: "1",
-    title:
-      "xxrickyhardxx - Igor Lucios (igorlucios) blindfolded and fucked raw by a sexy top - BoyFriendTV.com",
-    url: "https://www.boyfriendtv.com/videos/1246998/xxrickyhardxx-igor-lucios-igorlucios-blindfolded-and-fucked-raw-by-a-sexy-top/",
-  },
-  {
-    index: 1,
-    // parentId: "1",
-    title: "SANCHO GIVING UP THE BUSSY - BoyFriendTV.com",
-    url: "https://www.boyfriendtv.com/videos/1124302/sancho-giving-up-the-bussy/",
-  },
-  {
-    index: 1,
-    // parentId: "1",
-    title: "loc rios x yarddiestyle - BoyFriendTV.com",
-    url: "https://www.boyfriendtv.com/videos/1277042/loc-rios-x-yarddiestyle/",
-  },
+  // {
+  //   index: 1,
+  //   // parentId: "1",
+  //   title:
+  //     "xxrickyhardxx - Igor Lucios (igorlucios) blindfolded and fucked raw by a sexy top - BoyFriendTV.com",
+  //   url: "https://www.boyfriendtv.com/videos/1246998/xxrickyhardxx-igor-lucios-igorlucios-blindfolded-and-fucked-raw-by-a-sexy-top/",
+  // },
+  // {
+  //   index: 1,
+  //   // parentId: "1",
+  //   title: "SANCHO GIVING UP THE BUSSY - BoyFriendTV.com",
+  //   url: "https://www.boyfriendtv.com/videos/1124302/sancho-giving-up-the-bussy/",
+  // },
+  // {
+  //   index: 1,
+  //   // parentId: "1",
+  //   title: "loc rios x yarddiestyle - BoyFriendTV.com",
+  //   url: "https://www.boyfriendtv.com/videos/1277042/loc-rios-x-yarddiestyle/",
+  // },
+  // {
+  //   index: 1,
+  //   // parentId: "1",
+  //   title: "Diego Sans Sucking ",
+  //   url: "https://www.boyfriendtv.com/videos/1278367/diego-sans-sucking/",
+  // },
 ];
 
 // https://www.boyfriendtv.com/es/videos/1301842/bottom-takes-a-monstercock-in-her-big-ass/
 
 export async function testAddBookmarks() {
-  for (const bk of testBookmarkList) {
-    await browser.bookmarks.create(bk);
-  }
+  // for (const bk of testBookmarkList) {
+  //   await browser.bookmarks.create(bk);
+  // }
 }
 
 const fetchScript = `
@@ -129,20 +142,68 @@ async function main(pageUrlList) {
 return main(pageUrlList);
 `;
 
+const igayvideosFetchScript = `
+async function fetchThumb(pageUrlList) {
+  const url = "https://www.igayvideos.tv/nickoles-a-yarddiestyle_2808271.html";
+  const thumbList = [];
+  try {
+    const res = await fetch(url);
+    const html = await res.text();
+
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    const videos = doc.querySelectorAll("video");
+    const posters = Array.from(videos)
+      .map((video) => video.getAttribute("poster"))
+      .filter(Boolean);
+
+    if (posters.length === 0) {
+      console.warn("页面中没有找到任何 video 的 poster");
+    } else {
+      console.log("抓取到的 poster URL：");
+      posters.forEach((poster, idx) => {
+        console.log('poster: ', poster);
+      });
+      const thumb = { pageUrl: pageUrlList[0], thumbUrl: posters[0] };
+      return thumbList;
+    }
+  } catch (err) {
+    console.error("获取失败：", err);
+  }
+}
+
+async function main(pageUrlList) {
+  console.log("Start to run inject scripts.");
+  const thumbList = await fetchThumb(pageUrlList);
+  console.log("Script execute result -> thumbList: ", thumbList);
+  return thumbList;
+}
+
+return main(pageUrlList);
+`;
+
 export const testFetchConfList: FetchConfig[] = [
   {
     id: 1,
+    name: "Boyfriend TV fetch Video Thumbnail",
     hostname: "www.boyfriendtv.com",
     regexPattern:
       "^https:\\/\\/www\\.boyfriendtv\\.com(?:\\/es)?\\/videos\\/.+",
     fetchScript: fetchScript,
+  },
+  {
+    id: 2,
+    name: "iGayVideos fetch Video Thumbnail",
+    hostname: "www.igayvideos.tv",
+    fetchScript: igayvideosFetchScript,
   },
 ];
 
 // const config = [{hostname:testHostname, script: }]
 
 export async function testStorageConfig(): Promise<void> {
-  await browser.storage.local.set({ fetchConfigList: testFetchConfList });
+  await browser.storage.local.set({ [CONFIGS_KEY]: testFetchConfList });
 }
 
 // export async function testGetConfig(): Promise<FetchConfig[]> {

@@ -1,145 +1,155 @@
-import { useStore } from "./store/index";
-import { messageId } from "../global/message";
-import { useState, useEffect } from "react";
+import { HashRouter as Router, Routes, Route } from "react-router-dom";
+import { Box } from "@mui/material";
+import { NavBar } from "./Components/NavBar";
+
+import { ViewerPage } from "./Pages/viewerPage";
+import { ConfigPage } from "./Pages/configPage";
+import { ConfigEditPage } from "./Pages/configEditPage";
 import { useLoadBookmarks } from "./hooks/useLoadBookmarks";
-import {
-  BookmarkTreeNode,
-  MatchedUrl,
-  UnstoredUrl,
-  LoadedImage,
-} from "../global/types";
+import { NavItem } from "@/entrypoints/global/types";
 
-type StoredImage = { pageUrl: string; blobUrl: string };
+import { createTheme, ThemeProvider } from "@mui/material/styles";
 
-async function startGetThumb(unStoredUrlList: UnstoredUrl[]): Promise<void> {
-  console.log("Start to get thumbnail, unStoredUrlList", unStoredUrlList);
-  if (unStoredUrlList.length > 0) {
-    browser.runtime.sendMessage({
-      type: messageId.getThumb,
-      unStoredUrlList: unStoredUrlList,
-    });
-  } else {
-    alert("Bookmarks thumbnail all loaded.");
-  }
-}
+import { useStore } from "./store";
+
+const navItemList: NavItem[] = [
+  {
+    name: "Home",
+    path: "/",
+  },
+  {
+    name: "Config",
+    path: "/config",
+  },
+];
+
+const lightTheme = createTheme({
+  palette: {
+    mode: "light",
+    primary: {
+      main: "#1976d2",
+    },
+    background: {
+      default: "#f5f5f5",
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          textTransform: "none",
+          "&.nav-button": {
+            borderRadius: 8,
+            textTransform: "none",
+            backgroundColor: "#1976d2",
+            color: "#fff",
+          },
+        },
+      },
+      defaultProps: {
+        variant: "contained",
+        color: "primary",
+        size: "medium",
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {},
+      },
+      defaultProps: {},
+    },
+    MuiTypography: {
+      styleOverrides: {
+        root: {
+          "&.card-title": {
+            fontSize: 20,
+            fontWeight: 400,
+            // color: "#1976d2",
+            marginBottom: 2,
+
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            display: "-webkit-box",
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: "vertical",
+          },
+        },
+      },
+    },
+  },
+});
+
+const darkTheme = createTheme({
+  palette: {
+    mode: "dark",
+    primary: {
+      main: "#90caf9",
+    },
+    background: {
+      default: "#121212",
+    },
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 8,
+          textTransform: "none",
+        },
+      },
+      defaultProps: {
+        variant: "contained",
+        color: "primary",
+        size: "medium",
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {},
+      },
+      defaultProps: {},
+    },
+  },
+});
 
 export default function App() {
   useLoadBookmarks();
+  const getSetting = useStore((state) => state.getSetting);
+  const setting = useStore((state) => state.setting);
 
-  const loadFetchConfig = useStore((state) => state.loadFetchConfig);
-
-  const bookmarkList = useStore((state) => state.bookmarkList);
-  const matchBookmarks = useStore((state) => state.matchBookmarks);
-
-  const loadedImageList = useStore((state) => state.loadedImageList);
-
-  const matchedBookmarkList = useStore((state) => state.matchedBookmarkList);
-  const unStoredUrlList = useStore((state) => state.unStoredUrlList);
-  const matchedUrlList = useStore((state) => state.matchedUrlList);
-
-  // const [matchedBookmarkList, setMatchedBookmarkList] = useState<BookmarkTreeNode[]>([]);
-  // const [matchedUrlList, setMatchedUrlList] = useState<MatchedUrl[]>([]);
-  // const [unStoredUrlList, setUnStoredUrlList] = useState<UnstoredUrl[]>([]);
-
-  const startMatchBookmarks = async () => {
-    const matchRes = await matchBookmarks();
-    console.log("matchRes.matchedUrlList in APP: ", matchRes.matchedUrlList);
-  };
+  const [mode, setMode] = useState<"light" | "dark">("light");
+  const theme = mode === "light" ? lightTheme : darkTheme;
 
   useEffect(() => {
-    const loadConfig = async () => {
-      await loadFetchConfig();
-    };
-    loadConfig();
-    browser.runtime.onMessage.addListener(onMessageListener);
-
-    return () => {
-      loadedImageList.forEach((loadedImage) => {
-        const blobUrl: string = loadedImage.blobUrl;
-        if (blobUrl) {
-          URL.revokeObjectURL(blobUrl);
-        }
-      });
-    };
+    getSetting();
   }, []);
 
   useEffect(() => {
-    console.log("bookmarkList", bookmarkList);
-    startMatchBookmarks();
-  }, [bookmarkList]);
+    setMode(setting.darkMode ? "dark" : "light");
+  }, [setting]);
 
-  const onMessageListener = async (message: any) => {
-    if (message.type == messageId.getThumbfinished) {
-      startMatchBookmarks();
-    }
-  };
-
-  const getThumbSrc = (bkId: string) => {
-    const thumb: LoadedImage = loadedImageList.filter((loadedImage) => {
-      return loadedImage.bookmarkId === bkId;
-    })[0];
-    if (thumb) {
-      return thumb.blobUrl;
-    } else {
-      return "";
-    }
-  };
+  // setMode("light");
 
   return (
-    <>
-      <button
-        onClick={async () => {
-          await startGetThumb(unStoredUrlList);
-        }}
-      >
-        Open Tabs
-      </button>
-      <div>
-        {matchedBookmarkList.map((bk, index) => {
-          const id = bk.id;
-          const title = bk.title;
-          const url = bk.url;
-          const thumbBlobUrl = getThumbSrc(id);
-          console.log("thumbBlobUrl: ", thumbBlobUrl);
-          let thumbElement;
-          if (thumbBlobUrl) {
-            thumbElement = (
-              <div style={{ display: "block" }}>
-                <a href={url} target="_blank" rel="noopener noreferrer">
-                  <img
-                    src={thumbBlobUrl}
-                    alt={title}
-                    style={{ width: "400px", height: "auto" }}
-                  />
-                </a>
-              </div>
-            );
-          } else {
-            thumbElement = <></>;
-          }
-          return (
-            <div key={id} id={id}>
-              {thumbElement}
-              <div style={{ display: "flex" }}>
-                <span style={{ marginRight: "25px" }}>{title}:</span>
-                <a href={url} target="_blank" rel="noopener noreferrer">
-                  {url}
-                </a>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </>
+    <ThemeProvider theme={theme}>
+      <Router>
+        <Box
+          sx={{
+            // backgroundColor: "#f5f5f5",
+            minHeight: "100vh",
+            padding: 2,
+          }}
+        >
+          <NavBar title="BookmarkViewer" navItemList={navItemList}></NavBar>
+          <Routes>
+            <Route path="/" element={<ViewerPage />} />
+            <Route path="/config" element={<ConfigPage />} />
+            <Route path="/config/:id" element={<ConfigEditPage />} />
+            <Route path="/config/new" element={<ConfigEditPage />} />
+          </Routes>
+        </Box>
+      </Router>
+    </ThemeProvider>
   );
 }
-
-// <div style={{ display: "flex" }}>
-//   <div style={{ display: "block" }}>
-//     {loadedImageList.map((image, index) => {
-//       const blobUrl = image.blobUrl;
-//       console.log("Mapping url, index: ", index, " BlobUrl: ", blobUrl);
-//       return <img key={index} src={image.blobUrl} alt={`img-${index}`} />;
-//     })}
-//   </div>
-// </div>

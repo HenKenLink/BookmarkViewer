@@ -7,12 +7,12 @@ export default defineConfig({
     define: {
       // __DEV__: configEnv.mode === "production" ? false : true,
       __DEV__: true,
-      __CHROME__: false,
+      __CHROME__: true,
     },
   }),
   manifest: {
     name: "Bookmark Viewer",
-    version: "0.0.1",
+    version: "0.0.12",
     action: {
       default_icon: "/icon/48.png",
     },

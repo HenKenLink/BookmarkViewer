@@ -49,7 +49,8 @@ export function filterBookmarkByMatchPattern(
       const url = bk.url;
       if (url) {
         const urlHostname = new URL(url).hostname;
-        // console.log("urlHostname: ", urlHostname);
+        // console.log("Bookmark host: ", urlHostname);
+        // TODO: Hostname fuzzy match.
         return urlHostname === hostname;
       } else {
         return false;
