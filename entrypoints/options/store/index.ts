@@ -5,6 +5,7 @@ import {
   MatchedUrl,
   UnstoredUrl,
   FetchConfig,
+  LoadedImageMap,
 } from "../../global/types";
 // import { get } from "http";
 import {
@@ -36,7 +37,7 @@ type storeState = {
   matchedBookmarkList: BookmarkTreeNode[][];
   matchedUrlList: MatchedUrl[];
   unStoredUrlList: UnstoredUrl[];
-  loadedImageList: LoadedImage[];
+  loadedImageMap: LoadedImageMap;
   fetchConfigList: FetchConfig[];
 };
 
@@ -49,7 +50,7 @@ type storeAction = {
     unStoredUrlList: UnstoredUrl[];
     matchedBookmarkList: BookmarkTreeNode[][];
   }>;
-  updateLoadedImageList: (newLoadedImageList: LoadedImage[]) => void;
+  updateLoadedImageMap: (newLoadedImageMap: LoadedImageMap) => void;
   loadFetchConfig: () => Promise<void>;
   setFetchConfig: (newConfig: FetchConfig, isUpdate: boolean) => Promise<void>;
   delFetchConfig: (delIdList: number[]) => Promise<void>;
@@ -71,7 +72,7 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
   },
   getSetting: async () => {
     const result = await browser.storage.local.get(SETTINGS_KEY);
-    const storedSetting: Setting | undefined = result[SETTINGS_KEY];
+    const storedSetting: Setting | undefined = result[SETTINGS_KEY] as Setting | undefined;
     if (storedSetting) {
       set(() => ({ setting: storedSetting }));
     }
@@ -102,7 +103,7 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
   matchBookmarks: async () => {
     let configList = get().fetchConfigList;
 
-    if (!configList) {
+    if (!configList || configList.length === 0) {
       await get().loadFetchConfig();
       configList = get().fetchConfigList;
       // TODO:
@@ -117,43 +118,40 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     if (!bookmarkList) {
       throw new Error("BookmarkList is empty.");
     }
-    console.log("MatchBookmarks get bookmarkList result: ", bookmarkList);
 
     for (const config of configList) {
-      const { id, hostname, regexPattern, fetchScript } = config;
+      const { id, hostname, regexPattern, fetchScript, mode, selector, selectorType, attribute } = config;
       const bookmarkFilterRes = filterBookmarkByMatchPattern(bookmarkList, {
         hostname,
         ...(regexPattern ? { regexPattern } : {}),
       });
 
-      console.log(
-        "Config hostname: ",
-        hostname,
-        "Config match pattern: ",
-        regexPattern,
-        " Match result bookmarkFilterRes: ",
-        bookmarkFilterRes
-      );
       matchedBookmarkList.push(bookmarkFilterRes);
       const res = await loadPageUrlFromBookmarks(bookmarkFilterRes);
       const pageUrlList: PageUrl[] = res.pageUrlList;
-      console.log("pageUrlList in matchBookmarks: ", pageUrlList);
 
       const matchedUrl: MatchedUrl = {
         configId: id,
         hostname: hostname,
         pageUrlList: pageUrlList,
         fetchScript: fetchScript,
+        mode: mode,
+        selector: selector,
+        selectorType: selectorType,
+        attribute: attribute,
       };
       matchedUrlList.push(matchedUrl);
       const unStoredPageUrlList: string[] = res.unStoredPageUrlList;
-      console.log("unStoredPageUrlList: ", unStoredPageUrlList);
       if (unStoredPageUrlList && unStoredPageUrlList.length > 0) {
         unStoredUrlList.push({
           configId: id,
           hostname: hostname,
           pageUrlList: unStoredPageUrlList,
           fetchScript: fetchScript,
+          mode: mode,
+          selector: selector,
+          selectorType: selectorType,
+          attribute: attribute,
         });
       }
     }
@@ -165,18 +163,16 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
       matchedBookmarkList: matchedBookmarkList,
     };
     set(() => res);
-    console.log("Match res: ", { res });
     return res;
   },
-  updateLoadedImageList: (newLoadedImageList) => {
+  updateLoadedImageMap: (newLoadedImageMap) => {
     set((state) => ({
-      loadedImageList: [...state.loadedImageList, ...newLoadedImageList],
+      loadedImageMap: { ...state.loadedImageMap, ...newLoadedImageMap },
     }));
   },
   loadFetchConfig: async () => {
     const raw = await browser.storage.local.get(CONFIGS_KEY);
-    const fetchConfigList: FetchConfig[] = raw[CONFIGS_KEY];
-    console.log("fetchConfigList: ", fetchConfigList);
+    const fetchConfigList: FetchConfig[] = raw[CONFIGS_KEY] as FetchConfig[];
     set(() => ({ fetchConfigList: fetchConfigList }));
   },
   setFetchConfig: async (newConfig, isUpdate) => {
@@ -211,7 +207,7 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
 });
 
 export const useStore = create<Store>()((...action) => ({
-  setting: { darkMode: false } as Setting,
+  setting: { darkMode: false, enableAnimations: true } as Setting,
   bookmarkTree: null as BookmarkTreeNode | null,
   bookmarkList: [] as BookmarkTreeNode[],
   bookmarkMap: {} as BookmarkMap,
@@ -219,7 +215,7 @@ export const useStore = create<Store>()((...action) => ({
   matchedBookmarkList: [] as BookmarkTreeNode[][],
   matchedUrlList: [] as MatchedUrl[],
   unStoredUrlList: [] as UnstoredUrl[],
-  loadedImageList: [] as LoadedImage[],
+  loadedImageMap: {} as LoadedImageMap,
   fetchConfigList: [] as FetchConfig[],
   ...actionSlice(...action),
 }));

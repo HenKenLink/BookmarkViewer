@@ -4,51 +4,42 @@ import { CONFIGS_KEY } from "../options/consts";
 
 // 添加parentId会报错
 const testBookmarkList: CreateDetails[] = [
-  // {
-  //   index: 1,
-  //   // parentId: "1",
-  //   title: "Horsecock and Slut - BoyFriendTV.com",
-  //   url: "https://www.boyfriendtv.com/videos/1277637/horsecock-and-slut/",
-  // },
   {
     index: 1,
-    // parentId: "1",
+    title: "Kenvin Nguyen & Tien Quan - BoyFriendTV.com",
+    url: "https://www.boyfriendtv.com/videos/1255950/kenvin-nguyen-tien-quan-c3-teddy-teddy6859-c3-zero-s-men2024/",
+  },
+  {
+    index: 1,
+    title: "Str8 guy shoots a big load - BoyFriendTV.com",
+    url: "https://www.boyfriendtv.com/videos/1574084/str8-guy-shoots-a-big-load-riding-a-dildo/",
+  },
+  {
+    index: 1,
     title: "Nickoles A & YarddieStyle iGayVideos.TV",
     url: "https://www.igayvideos.tv/nickoles-a-yarddiestyle_2808271.html",
   },
-  // {
-  //   index: 1,
-  //   // parentId: "1",
-  //   title:
-  //     "xxrickyhardxx - Igor Lucios (igorlucios) blindfolded and fucked raw by a sexy top - BoyFriendTV.com",
-  //   url: "https://www.boyfriendtv.com/videos/1246998/xxrickyhardxx-igor-lucios-igorlucios-blindfolded-and-fucked-raw-by-a-sexy-top/",
-  // },
-  // {
-  //   index: 1,
-  //   // parentId: "1",
-  //   title: "SANCHO GIVING UP THE BUSSY - BoyFriendTV.com",
-  //   url: "https://www.boyfriendtv.com/videos/1124302/sancho-giving-up-the-bussy/",
-  // },
-  // {
-  //   index: 1,
-  //   // parentId: "1",
-  //   title: "loc rios x yarddiestyle - BoyFriendTV.com",
-  //   url: "https://www.boyfriendtv.com/videos/1277042/loc-rios-x-yarddiestyle/",
-  // },
-  // {
-  //   index: 1,
-  //   // parentId: "1",
-  //   title: "Diego Sans Sucking ",
-  //   url: "https://www.boyfriendtv.com/videos/1278367/diego-sans-sucking/",
-  // },
+  {
+    index: 1,
+    title: "Loc Rios and David Christian (Dombeeef) fuck",
+    url: "https://justthegays.tv/video/loc-rios-and-david-christian-dombeeef-fuck-91",
+  },
 ];
 
 // https://www.boyfriendtv.com/es/videos/1301842/bottom-takes-a-monstercock-in-her-big-ass/
 
 export async function testAddBookmarks() {
-  // for (const bk of testBookmarkList) {
-  //   await browser.bookmarks.create(bk);
-  // }
+  for (const bk of testBookmarkList) {
+    try {
+      // Check if bookmark already exists to avoid redundant additions
+      const existing = await browser.bookmarks.search({ url: bk.url });
+      if (existing.length === 0) {
+        await browser.bookmarks.create(bk);
+      }
+    } catch (e) {
+      console.error("Fail to add test bookmark:", bk.url, e);
+    }
+  }
 }
 
 const fetchScript = `
@@ -191,12 +182,22 @@ export const testFetchConfList: FetchConfig[] = [
     regexPattern:
       "^https:\\/\\/www\\.boyfriendtv\\.com(?:\\/es)?\\/videos\\/.+",
     fetchScript: fetchScript,
+    mode: "inject",
   },
   {
     id: 2,
     name: "iGayVideos fetch Video Thumbnail",
     hostname: "www.igayvideos.tv",
     fetchScript: igayvideosFetchScript,
+    mode: "inject",
+  },
+  {
+    id: 3,
+    name: "JustTheGays fetch Video Thumbnail",
+    hostname: "justthegays.tv",
+    regexPattern: "^https:\\/\\/justthegays\\.tv\\/video\\/.+",
+    selector: '"thumbnailUrl":"(.*?)"',
+    mode: "simple",
   },
 ];
 

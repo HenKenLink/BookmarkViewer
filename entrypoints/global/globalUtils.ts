@@ -4,7 +4,6 @@ export function waitForTabLoad(tabId: number): Promise<void> {
   return new Promise((resolve) => {
     const listener = (updatedTabId: number, changeInfo: any) => {
       if (updatedTabId === tabId && changeInfo.status === "complete") {
-        console.log("Tab loaded.");
         browser.tabs.onUpdated.removeListener(listener);
         resolve();
       }

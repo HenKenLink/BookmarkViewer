@@ -13,9 +13,12 @@ import MenuIcon from "@mui/icons-material/Menu";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
+import Tooltip from "@mui/material/Tooltip";
 
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
+import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
+import AutoFixOffIcon from "@mui/icons-material/AutoFixOff";
 
 import { Link } from "react-router-dom";
 
@@ -44,6 +47,10 @@ export function NavBar(props: NavProps) {
 
   const toggleDarkMode = async () => {
     await setSetting({ darkMode: setting.darkMode ? false : true });
+  };
+
+  const toggleAnimations = async () => {
+    await setSetting({ enableAnimations: !setting.enableAnimations });
   };
 
   const drawer = (
@@ -107,6 +114,15 @@ export function NavBar(props: NavProps) {
               ))}
             </Box>
             <Box>
+              <Tooltip title={setting.enableAnimations ? "Disable Animations" : "Enable Animations"}>
+                <IconButton
+                  color="inherit"
+                  onClick={toggleAnimations}
+                  sx={{ ml: 1 }}
+                >
+                  {setting.enableAnimations ? <AutoFixHighIcon /> : <AutoFixOffIcon />}
+                </IconButton>
+              </Tooltip>
               <IconButton
                 color="inherit"
                 onClick={toggleDarkMode}

@@ -1,4 +1,4 @@
-import { BookmarkTreeNode, PageUrl, LoadedImage } from "../global/types";
+import { BookmarkTreeNode, PageUrl, LoadedImage, LoadedImageMap } from "../global/types";
 import { useStore } from "./store";
 
 // export function filterBookmarkByHostname(
@@ -88,47 +88,81 @@ export function filterBookmarkByMatchPattern(
 // }
 
 // Get pageUrl from bookmark and load image from local storage
+// Get pageUrl from bookmark and load image from local storage
 export async function loadPageUrlFromBookmarks(
   bookmarkList: BookmarkTreeNode[]
 ): Promise<{ pageUrlList: PageUrl[]; unStoredPageUrlList: string[] }> {
-  const loadedImageList = useStore.getState().loadedImageList;
-  const updateLoadedImageList = useStore.getState().updateLoadedImageList;
+  const loadedImageMap = useStore.getState().loadedImageMap;
+  const updateLoadedImageMap = useStore.getState().updateLoadedImageMap;
 
   const unStoredUrlList: string[] = [];
-  const newLoadedImageList: LoadedImage[] = [];
+  const newLoadedImageMap: LoadedImageMap = {};
   const pageUrlList: PageUrl[] = [];
+
+  // 1. Identify URLs that need checking (avoid fetching if we already have a blobUrl for this bookmark? 
+  // actually we need to check if the blobUrl is still valid? No, assumption is if in store, it's valid)
+  // But strictly, if we already have loadedImageMap[bk.id], we don't need to look at storage.
+
+  const urlsToFetch = new Set<string>();
+
   for (const bk of bookmarkList) {
-    const purl: string = bk.url as string;
-    try {
-      let isLoaded = loadedImageList.some((item) => item.pageUrl === purl);
-      if (!isLoaded) {
-        const res = await browser.storage.local.get(purl);
-        const raw = res[purl];
-        if (res && raw && raw.length > 0) {
-          const buf = new Uint8Array(raw);
-          const blob = new Blob([buf.buffer], { type: "image/jpeg" });
-          const blobUrl = URL.createObjectURL(blob);
-          const loadedImage: LoadedImage = {
-            bookmarkId: bk.id,
-            pageUrl: purl,
-            blobUrl: blobUrl,
-          };
-          newLoadedImageList.push(loadedImage);
-          isLoaded = true;
-        } else {
-          unStoredUrlList.push(purl);
-        }
-      }
-      const pageUrl: PageUrl = { url: purl, isLoaded: isLoaded };
-      console.log("pageUrl in loadPageUrlFromBookmarks: ", pageUrl);
-      pageUrlList.push(pageUrl);
-    } catch (e) {
-      console.error("Error occurred when get stored images for", purl, e);
+    const purl = bk.url;
+    if (purl && !loadedImageMap[bk.id]) {
+      urlsToFetch.add(purl);
     }
   }
-  updateLoadedImageList(newLoadedImageList);
-  console.log("pageUrlList in loadPageUrlFromBookmarks: ", pageUrlList);
-  return { pageUrlList: pageUrlList, unStoredPageUrlList: unStoredUrlList };
+
+  // 2. Batch fetch from storage
+  let storageData: Record<string, any> = {};
+  if (urlsToFetch.size > 0) {
+    try {
+      storageData = await browser.storage.local.get(Array.from(urlsToFetch));
+    } catch (e) {
+      console.error("Error batch fetching from storage:", e);
+    }
+  }
+
+  // 3. Process bookmarks
+  // Cache created BlobURLs to avoid creating duplicates for same URL
+  const urlToBlobUrlRaw: Record<string, string> = {};
+
+  for (const bk of bookmarkList) {
+    const purl = bk.url;
+    if (!purl) continue;
+
+    let isLoaded = false;
+
+    // Check if already in memory
+    if (loadedImageMap[bk.id]) {
+      isLoaded = true;
+    } else {
+      // Check storage result
+      const raw = storageData[purl];
+      if (raw && raw.length > 0) {
+        // Create or reuse BlobURL
+        if (!urlToBlobUrlRaw[purl]) {
+          const buf = new Uint8Array(raw);
+          const blob = new Blob([buf.buffer], { type: "image/jpeg" });
+          urlToBlobUrlRaw[purl] = URL.createObjectURL(blob);
+        }
+
+        newLoadedImageMap[bk.id] = urlToBlobUrlRaw[purl];
+        isLoaded = true;
+      } else {
+        // Not in memory, not in storage
+        unStoredUrlList.push(purl);
+      }
+    }
+
+    pageUrlList.push({ url: purl, isLoaded });
+  }
+
+  // 4. Update store
+  if (Object.keys(newLoadedImageMap).length > 0) {
+    updateLoadedImageMap(newLoadedImageMap);
+  }
+
+  return { pageUrlList, unStoredPageUrlList: unStoredUrlList };
 }
 
 // export async function filterStoredMatchedUrl(matchedUrlList: MatchedUrl[]): MatchedUrl[]{

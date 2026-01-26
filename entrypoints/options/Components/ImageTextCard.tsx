@@ -9,19 +9,13 @@ import {
   Chip,
   Stack,
   Tooltip,
+  IconButton,
 } from "@mui/material";
 import { styled } from "@mui/material/styles";
-import { useState, useRef, useEffect } from "react";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+import LanguageIcon from "@mui/icons-material/Language";
 
 import { CardItem } from "./PageItem";
-
-// // 定义数据项的类型接口
-// interface CardItem {
-//   image?: string;
-//   title: string;
-//   url: string;
-//   tags?: string[];
-// }
 
 // 定义ImageTextCard组件的props类型
 interface ImageTextCardProps {
@@ -32,18 +26,35 @@ interface ImageTextCardProps {
 }
 
 // 使用styled创建样式化的CardMedia组件
+const ImageContainer = styled(Box)(({ theme }) => ({
+  width: 280,
+  minWidth: 280,
+  height: 180,
+  position: "relative",
+  overflow: "hidden",
+  [theme.breakpoints.down("sm")]: {
+    width: "100%",
+    height: 200,
+  },
+}));
+
 const StyledCardMedia = styled(CardMedia)({
-  width: 300,
-  height: 200,
+  width: "100%",
+  height: "100%",
   objectFit: "cover",
-});
+  transition: "transform 0.5s ease",
+  "&:hover": {
+    transform: "scale(1.05)",
+  },
+}) as typeof CardMedia;
 
 // 使用styled创建内容区域组件
 const ContentArea = styled(Box)({
   display: "flex",
   flexDirection: "column",
+  justifyContent: "space-between",
   flex: 1,
-  padding: 20,
+  padding: "20px 24px",
 });
 
 // ImageTextCard组件
@@ -53,62 +64,104 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = ({
   url,
   tags = [],
 }) => {
+  const hostname = new URL(url).hostname;
+
   return (
-    <CardItem>
-      {image ? (
+    <CardItem sx={{ p: 0, display: "flex", flexDirection: { xs: "column", sm: "row" }, alignItems: "stretch", mb: 3 }}>
+      {/* Image Section */}
+      <ImageContainer>
         <Link
           href={url}
           target="_blank"
           rel="noopener noreferrer"
           underline="none"
         >
-          <StyledCardMedia
-            component="img"
-            image={image}
-            alt={title}
-            sx={{
-              objectFit: "cover", // or 'contain'
-            }}
-          />
+          {image ? (
+            <StyledCardMedia
+              component="img"
+              image={image}
+              alt={title}
+            />
+          ) : (
+            <Box
+              sx={{
+                width: "100%",
+                height: "100%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: "grey.200",
+                color: "grey.500",
+              }}
+            >
+              <Typography variant="body2">No Preview</Typography>
+            </Box>
+          )}
         </Link>
-      ) : null}
+      </ImageContainer>
 
+      {/* Content Section */}
       <ContentArea>
-        <Tooltip title={title} arrow followCursor>
-          <Typography className="card-title">{title}</Typography>
-        </Tooltip>
+        <Box>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2 }}>
+            <Link
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              underline="none"
+              sx={{
+                color: "text.primary",
+                flexGrow: 1,
+                "&:hover": { color: "primary.main" }
+              }}
+            >
+              <Typography
+                variant="h6"
+                sx={{
+                  fontWeight: 600,
+                  lineHeight: 1.3,
+                  display: "-webkit-box",
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: "vertical",
+                  overflow: "hidden"
+                }}
+              >
+                {title}
+              </Typography>
+            </Link>
+            <IconButton
+              size="small"
+              component="a"
+              href={url}
+              target="_blank"
+              sx={{ color: "grey.400", mt: -0.5 }}
+            >
+              <OpenInNewIcon fontSize="small" />
+            </IconButton>
+          </Box>
 
-        {tags.length > 0 && (
-          <Stack direction="row" spacing={1} sx={{ marginBottom: 2 }}>
-            {tags.map((tag: string, index: number) => (
-              <Chip
-                key={index}
-                label={tag}
-                size="small"
-                variant="outlined"
-                color="primary"
-              />
-            ))}
-          </Stack>
-        )}
-
-        <Box sx={{ marginTop: "auto" }}>
-          <Link
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-            variant="body2"
-            sx={{
-              // color: "#1976d2",
-              textDecoration: "none",
-              "&:hover": {
-                textDecoration: "underline",
-              },
-            }}
-          >
-            {url}
-          </Link>
+          <Tooltip title={url} arrow placement="bottom-start">
+            <Box sx={{ display: "flex", alignItems: "center", gap: 0.5, mt: 1, color: "text.secondary", width: "fit-content", cursor: "help" }}>
+              <LanguageIcon sx={{ fontSize: 14 }} />
+              <Typography variant="caption" sx={{ fontWeight: 500 }}>
+                {hostname}
+              </Typography>
+            </Box>
+          </Tooltip>
         </Box>
+
+        <Stack direction="row" spacing={1} sx={{ mt: 2, flexWrap: "wrap", gap: 1 }}>
+          {tags.map((tag, index) => (
+            <Chip
+              key={index}
+              label={tag}
+              size="small"
+              variant="soft"
+              color="primary"
+              sx={{ borderRadius: "6px", fontWeight: 500 }}
+            />
+          ))}
+        </Stack>
       </ContentArea>
     </CardItem>
   );

@@ -11,6 +11,7 @@ import { NavItem } from "@/entrypoints/global/types";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 
 import { useStore } from "./store";
+import { Toaster } from "sonner";
 
 const navItemList: NavItem[] = [
   {
@@ -133,6 +134,7 @@ export default function App() {
 
   return (
     <ThemeProvider theme={theme}>
+      <Toaster />
       <Router>
         <Box
           sx={{
