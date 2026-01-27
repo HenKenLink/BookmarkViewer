@@ -24,6 +24,11 @@ const testBookmarkList: CreateDetails[] = [
     title: "Loc Rios and David Christian (Dombeeef) fuck",
     url: "https://justthegays.tv/video/loc-rios-and-david-christian-dombeeef-fuck-91",
   },
+  {
+    index: 1,
+    title: "TheRealKingCock fucks Jaxx Cody (jaxx_cody)",
+    url: "https://gayforfans.com/video/therealkingcock-fucks-jaxx-cody-jaxx_cody-1763044888/",
+  },
 ];
 
 // https://www.boyfriendtv.com/es/videos/1301842/bottom-takes-a-monstercock-in-her-big-ass/
@@ -133,46 +138,7 @@ async function main(pageUrlList) {
 return main(pageUrlList);
 `;
 
-const igayvideosFetchScript = `
-async function fetchThumb(pageUrlList) {
-  const url = "https://www.igayvideos.tv/nickoles-a-yarddiestyle_2808271.html";
-  const thumbList = [];
-  try {
-    const res = await fetch(url);
-    const html = await res.text();
-
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, "text/html");
-
-    const videos = doc.querySelectorAll("video");
-    const posters = Array.from(videos)
-      .map((video) => video.getAttribute("poster"))
-      .filter(Boolean);
-
-    if (posters.length === 0) {
-      console.warn("页面中没有找到任何 video 的 poster");
-    } else {
-      console.log("抓取到的 poster URL：");
-      posters.forEach((poster, idx) => {
-        console.log('poster: ', poster);
-      });
-      const thumb = { pageUrl: pageUrlList[0], thumbUrl: posters[0] };
-      return thumbList;
-    }
-  } catch (err) {
-    console.error("获取失败：", err);
-  }
-}
-
-async function main(pageUrlList) {
-  console.log("Start to run inject scripts.");
-  const thumbList = await fetchThumb(pageUrlList);
-  console.log("Script execute result -> thumbList: ", thumbList);
-  return thumbList;
-}
-
-return main(pageUrlList);
-`;
+// igayvideosFetchScript removed as it's now using simple mode
 
 export const testFetchConfList: FetchConfig[] = [
   {
@@ -188,8 +154,9 @@ export const testFetchConfList: FetchConfig[] = [
     id: 2,
     name: "iGayVideos fetch Video Thumbnail",
     hostname: "www.igayvideos.tv",
-    fetchScript: igayvideosFetchScript,
-    mode: "inject",
+    regexPattern: "^https:\\/\\/www\\.igayvideos\\.tv\\/.+",
+    selector: 'poster="(.*?)"',
+    mode: "simple",
   },
   {
     id: 3,
@@ -197,6 +164,14 @@ export const testFetchConfList: FetchConfig[] = [
     hostname: "justthegays.tv",
     regexPattern: "^https:\\/\\/justthegays\\.tv\\/video\\/.+",
     selector: '"thumbnailUrl":"(.*?)"',
+    mode: "simple",
+  },
+  {
+    id: 4,
+    name: "GayForFans fetch Video Thumbnail",
+    hostname: "gayforfans.com",
+    regexPattern: "^https:\\/\\/gayforfans\\.com\\/video\\/.+",
+    selector: 'poster="(.*?)"',
     mode: "simple",
   },
 ];

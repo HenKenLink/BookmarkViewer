@@ -54,6 +54,7 @@ type storeAction = {
   loadFetchConfig: () => Promise<void>;
   setFetchConfig: (newConfig: FetchConfig, isUpdate: boolean) => Promise<void>;
   delFetchConfig: (delIdList: number[]) => Promise<void>;
+  importConfigList: (newConfigList: FetchConfig[]) => Promise<void>;
 };
 
 type Store = storeState & storeAction;
@@ -201,6 +202,10 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
         return !delIdList.includes(config.id);
       }
     );
+    set(() => ({ fetchConfigList: newConfigList }));
+    await browser.storage.local.set({ [CONFIGS_KEY]: newConfigList });
+  },
+  importConfigList: async (newConfigList) => {
     set(() => ({ fetchConfigList: newConfigList }));
     await browser.storage.local.set({ [CONFIGS_KEY]: newConfigList });
   },

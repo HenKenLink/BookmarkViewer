@@ -172,6 +172,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
           target: { tabId },
           func: dynamicExecutor,
           args: [script, pageUrlList],
+          world: "MAIN",
         });
         if (res && res[0].result) {
           // @ts-ignore
