@@ -1,5 +1,5 @@
 import { useStore } from "../store/index";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { toast } from "sonner";
 
 import {
@@ -8,7 +8,6 @@ import {
   TextField,
   Typography,
   Button,
-  Toolbar,
   Checkbox,
   Chip,
   Stack,
@@ -16,12 +15,7 @@ import {
   Tooltip,
   alpha,
   Paper,
-  Fade,
   Grow,
-  Menu,
-  MenuItem,
-  ListItemIcon,
-  ListItemText,
 } from "@mui/material";
 
 import LanguageIcon from "@mui/icons-material/Language";
@@ -33,16 +27,10 @@ import CloseIcon from "@mui/icons-material/Close";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SearchIcon from "@mui/icons-material/Search";
-import FileUploadIcon from "@mui/icons-material/FileUpload";
-import FileDownloadIcon from "@mui/icons-material/FileDownload";
-import MoreVertIcon from "@mui/icons-material/MoreVert";
-
-import { Link, replace, useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { styled, keyframes } from "@mui/material/styles";
-import { CardItem, BoxItem } from "../Components/PageItem";
-import { grey } from "@mui/material/colors";
 
-import { PAGE_ITEM_SX } from "../consts";
+
 
 // Gradient animation for header
 const gradientShift = keyframes`
@@ -168,63 +156,11 @@ export function ConfigPage() {
   const [isMutiSelect, setIsMutiSelect] = useState<boolean>(false);
   const [selectedItemList, setSelectedItemList] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
-  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
-  const openMenu = Boolean(menuAnchorEl);
-  const importInputRef = useRef<HTMLInputElement>(null);
 
   const configList = useStore((state) => state.fetchConfigList);
   const delFetchConfig = useStore((state) => state.delFetchConfig);
-  const importConfigList = useStore((state) => state.importConfigList);
   const setting = useStore((state) => state.setting);
   const navigate = useNavigate();
-
-  const handleExport = () => {
-    const data = JSON.stringify(configList, null, 2);
-    const blob = new Blob([data], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `bookmark_viewer_configs_${new Date().toISOString().split("T")[0]}.json`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    toast.success("Configurations exported successfully");
-  };
-
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      try {
-        const content = event.target?.result as string;
-        const importedConfigs = JSON.parse(content);
-        if (Array.isArray(importedConfigs)) {
-          await importConfigList(importedConfigs);
-          toast.success("Configurations imported successfully");
-        } else {
-          toast.error("Invalid configuration file format");
-        }
-      } catch (error) {
-        console.error("Import error:", error);
-        toast.error("Failed to parse configuration file");
-      }
-    };
-    reader.readAsText(file);
-    // Reset file input
-    e.target.value = "";
-    handleMenuClose();
-  };
-
-  const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    setMenuAnchorEl(event.currentTarget);
-  };
-
-  const handleMenuClose = () => {
-    setMenuAnchorEl(null);
-  };
 
   const configPageNavigate = (id: number) => {
     navigate(`/config/${id}`);
@@ -239,14 +175,6 @@ export function ConfigPage() {
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1000, mx: "auto" }}>
-      {/* Hidden file input for config import */}
-      <input
-        type="file"
-        ref={importInputRef}
-        hidden
-        accept=".json"
-        onChange={handleImport}
-      />
       {/* Modern Header Area */}
       <HeaderBox enableAnimations={setting.enableAnimations}>
         <Box sx={{ zIndex: 1 }}>
@@ -349,110 +277,46 @@ export function ConfigPage() {
           >
             {isMutiSelect ? "Cancel" : "Select"}
           </ActionButton>
-
-          {!isMutiSelect && (
-            <>
-              <Tooltip title="Actions">
-                <IconButton
-                  onClick={handleMenuClick}
-                  sx={{
-                    color: "white",
-                    "&:hover": { background: "rgba(255, 255, 255, 0.2)" },
-                  }}
-                >
-                  <MoreVertIcon />
-                </IconButton>
-              </Tooltip>
-
-              <Menu
-                anchorEl={menuAnchorEl}
-                open={openMenu}
-                onClose={handleMenuClose}
-                transformOrigin={{ horizontal: 'right', vertical: 'top' }}
-                anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
-                PaperProps={{
-                  elevation: 0,
-                  sx: {
-                    overflow: 'visible',
-                    filter: 'drop-shadow(0px 2px 8px rgba(0,0,0,0.32))',
-                    mt: 1.5,
-                    borderRadius: 2,
-                    minWidth: 160,
-                    '& .MuiMenuItem-root': {
-                      px: 2,
-                      py: 1.2,
-                      borderRadius: 1,
-                      mx: 0.5,
-                      '&:hover': {
-                        backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.08),
-                      },
-                    },
-                  },
-                }}
-              >
-                <MenuItem onClick={handleExport}>
-                  <ListItemIcon>
-                    <FileUploadIcon fontSize="small" color="primary" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Export"
-                    primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
-                  />
-                </MenuItem>
-
-                <MenuItem onClick={() => {
-                  handleMenuClose();
-                  importInputRef.current?.click();
-                }}>
-                  <ListItemIcon>
-                    <FileDownloadIcon fontSize="small" color="primary" />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary="Import"
-                    primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
-                  />
-                </MenuItem>
-              </Menu>
-            </>
-          )}
         </Stack>
       </HeaderBox>
 
       {/* Search Bar */}
-      {configList.length > 0 && (
-        <Paper
-          elevation={0}
-          sx={{
-            display: "flex",
-            alignItems: "center",
-            gap: 1.5,
-            p: 1.5,
-            pl: 2.5,
-            mb: 3,
-            borderRadius: 3,
-            border: "1px solid",
-            borderColor: "divider",
-            transition: "all 0.2s ease",
-            "&:focus-within": {
-              borderColor: "primary.main",
-              boxShadow: theme => `0 0 0 3px ${alpha(theme.palette.primary.main, 0.1)}`,
-            },
-          }}
-        >
-          <SearchIcon sx={{ color: "text.secondary", fontSize: 22 }} />
-          <TextField
-            variant="standard"
-            placeholder="Search configurations..."
-            fullWidth
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            InputProps={{
-              disableUnderline: true,
-              sx: { fontSize: "0.95rem" },
+      {
+        configList.length > 0 && (
+          <Paper
+            elevation={0}
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              p: 1.5,
+              pl: 2.5,
+              mb: 3,
+              borderRadius: 3,
+              border: "1px solid",
+              borderColor: "divider",
+              transition: "all 0.2s ease",
+              "&:focus-within": {
+                borderColor: "primary.main",
+                boxShadow: theme => `0 0 0 3px ${alpha(theme.palette.primary.main, 0.1)}`,
+              },
             }}
-          />
-        </Paper>
-      )}
+          >
+            <SearchIcon sx={{ color: "text.secondary", fontSize: 22 }} />
+            <TextField
+              variant="standard"
+              placeholder="Search configurations..."
+              fullWidth
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              InputProps={{
+                disableUnderline: true,
+                sx: { fontSize: "0.95rem" },
+              }}
+            />
+          </Paper>
+        )
+      }
 
       {/* Config List */}
       <Stack spacing={2}>
@@ -663,6 +527,6 @@ export function ConfigPage() {
           })
         )}
       </Stack>
-    </Box>
+    </Box >
   );
 }
