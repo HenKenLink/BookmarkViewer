@@ -10,8 +10,9 @@ import {
   Stack,
   Tooltip,
   IconButton,
+  Skeleton,
 } from "@mui/material";
-import { styled } from "@mui/material/styles";
+import { styled, alpha } from "@mui/material/styles";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import LanguageIcon from "@mui/icons-material/Language";
 
@@ -57,7 +58,6 @@ const ContentArea = styled(Box)({
   padding: "20px 24px",
 });
 
-// ImageTextCard组件
 export const ImageTextCard: React.FC<ImageTextCardProps> = ({
   image,
   title,
@@ -65,9 +65,42 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = ({
   tags = [],
 }) => {
   const hostname = new URL(url).hostname;
+  const [isInView, setIsInView] = React.useState(false);
+  const cardRef = React.useRef<HTMLDivElement>(null);
+
+  React.useEffect(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setIsInView(true);
+          observer.disconnect();
+        }
+      },
+      {
+        rootMargin: "200px", // Load slightly before it comes into view
+        threshold: 0.01,
+      }
+    );
+
+    if (cardRef.current) {
+      observer.observe(cardRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, []);
 
   return (
-    <CardItem sx={{ p: 0, display: "flex", flexDirection: { xs: "column", sm: "row" }, alignItems: "stretch", mb: 3 }}>
+    <CardItem
+      ref={cardRef}
+      sx={{
+        p: 0,
+        display: "flex",
+        flexDirection: { xs: "column", sm: "row" },
+        alignItems: "stretch",
+        mb: 3,
+        overflow: "hidden",
+      }}
+    >
       {/* Image Section */}
       <ImageContainer>
         <Link
@@ -76,26 +109,36 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = ({
           rel="noopener noreferrer"
           underline="none"
         >
-          {image ? (
-            <StyledCardMedia
-              component="img"
-              image={image}
-              alt={title}
-            />
+          {isInView ? (
+            image ? (
+              <StyledCardMedia
+                component="img"
+                image={image}
+                alt={title}
+              />
+            ) : (
+              <Box
+                sx={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "grey.200",
+                  color: "grey.500",
+                }}
+              >
+                <Typography variant="body2">No Preview</Typography>
+              </Box>
+            )
           ) : (
-            <Box
-              sx={{
-                width: "100%",
-                height: "100%",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                backgroundColor: "grey.200",
-                color: "grey.500",
-              }}
-            >
-              <Typography variant="body2">No Preview</Typography>
-            </Box>
+            <Skeleton
+              variant="rectangular"
+              width="100%"
+              height="100%"
+              animation="wave"
+              sx={{ bgcolor: (theme) => alpha(theme.palette.grey[200], 0.5) }}
+            />
           )}
         </Link>
       </ImageContainer>

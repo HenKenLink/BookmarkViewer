@@ -2,43 +2,37 @@ import { create, StateCreator } from "zustand";
 import {
   Setting,
   BookmarkTreeNode,
-  MatchedUrl,
-  UnstoredUrl,
   FetchConfig,
+  FetchTask,
+  BookmarkFetchItem,
   LoadedImageMap,
 } from "../../global/types";
-// import { get } from "http";
 import {
   filterBookmarkByMatchPattern,
-  loadPageUrlFromBookmarks,
+  checkBookmarksLoadStatus,
 } from "../utils";
 
-import { PageUrl, LoadedImage } from "../../global/types";
-
 import { SETTINGS_KEY, CONFIGS_KEY } from "../consts";
-import { Settings } from "@mui/icons-material";
 
 type BookmarkMap = Record<string, BookmarkTreeNode>;
-
-const fetchConfigStorageKey: string = "fetchConfigList";
 
 // export const loadedImageList: LoadedImage[] = [];
 
 type storeState = {
-  // urlList: string[];
   setting: Setting;
   bookmarkTree: BookmarkTreeNode | null;
   bookmarkList: BookmarkTreeNode[];
   bookmarkMap: BookmarkMap;
-  // TODO: `matchedBookmarkList` might be unnecessary.
-  // Consider modifying `PageUrl` to:
-  // { url: string; isLoaded: boolean; bookmarkId: string }
-  // so we can find the corresponding bookmark via `matchedUrlList` using `bookmarkId`.
-  matchedBookmarkList: BookmarkTreeNode[][];
-  matchedUrlList: MatchedUrl[];
-  unStoredUrlList: UnstoredUrl[];
+  // 所有匹配的书签（用于UI显示）
+  matchedBookmarks: BookmarkTreeNode[];
+  // 待获取封面的任务列表（只包含未加载的）
+  fetchTaskList: FetchTask[];
   loadedImageMap: LoadedImageMap;
   fetchConfigList: FetchConfig[];
+  // Fetch status
+  isFetching: boolean;
+  fetchProgress: number;
+  fetchTotal: number;
 };
 
 type storeAction = {
@@ -46,15 +40,20 @@ type storeAction = {
   getSetting: () => Promise<void>;
   loadBookmarkTree: () => Promise<void>;
   matchBookmarks: () => Promise<{
-    matchedUrlList: MatchedUrl[];
-    unStoredUrlList: UnstoredUrl[];
-    matchedBookmarkList: BookmarkTreeNode[][];
+    matchedBookmarks: BookmarkTreeNode[];
+    fetchTaskList: FetchTask[];
   }>;
   updateLoadedImageMap: (newLoadedImageMap: LoadedImageMap) => void;
   loadFetchConfig: () => Promise<void>;
   setFetchConfig: (newConfig: FetchConfig, isUpdate: boolean) => Promise<void>;
   delFetchConfig: (delIdList: number[]) => Promise<void>;
   importConfigList: (newConfigList: FetchConfig[]) => Promise<void>;
+  clearLoadedImageMap: () => void;
+  // Fetch status actions
+  setFetchStatus: (isFetching: boolean, total?: number) => void;
+  updateFetchProgress: (progress: number) => void;
+  loadSingleThumb: (pageUrl: string) => Promise<void>;
+  stopFetching: () => void;
 };
 
 type Store = storeState & storeAction;
@@ -107,61 +106,51 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     if (!configList || configList.length === 0) {
       await get().loadFetchConfig();
       configList = get().fetchConfigList;
-      // TODO:
-      // alert("Fail to get config.");
-      // throw new Error("Fail to get config.");
     }
 
-    const matchedBookmarkList: BookmarkTreeNode[][] = [];
-    const matchedUrlList: MatchedUrl[] = [];
-    const unStoredUrlList: UnstoredUrl[] = [];
     const bookmarkList = get().bookmarkList;
     if (!bookmarkList) {
       throw new Error("BookmarkList is empty.");
     }
 
+    const allMatchedBookmarks: BookmarkTreeNode[] = [];
+    const fetchTaskList: FetchTask[] = [];
+
     for (const config of configList) {
-      const { id, hostname, regexPattern, fetchScript, mode, selector, selectorType, attribute } = config;
-      const bookmarkFilterRes = filterBookmarkByMatchPattern(bookmarkList, {
+      const { hostname, regexPattern } = config;
+
+      // 筛选匹配的书签
+      const matchedBookmarks = filterBookmarkByMatchPattern(bookmarkList, {
         hostname,
         ...(regexPattern ? { regexPattern } : {}),
       });
 
-      matchedBookmarkList.push(bookmarkFilterRes);
-      const res = await loadPageUrlFromBookmarks(bookmarkFilterRes);
-      const pageUrlList: PageUrl[] = res.pageUrlList;
+      allMatchedBookmarks.push(...matchedBookmarks);
 
-      const matchedUrl: MatchedUrl = {
-        configId: id,
-        hostname: hostname,
-        pageUrlList: pageUrlList,
-        fetchScript: fetchScript,
-        mode: mode,
-        selector: selector,
-        selectorType: selectorType,
-        attribute: attribute,
-      };
-      matchedUrlList.push(matchedUrl);
-      const unStoredPageUrlList: string[] = res.unStoredPageUrlList;
-      if (unStoredPageUrlList && unStoredPageUrlList.length > 0) {
-        unStoredUrlList.push({
-          configId: id,
-          hostname: hostname,
-          pageUrlList: unStoredPageUrlList,
-          fetchScript: fetchScript,
-          mode: mode,
-          selector: selector,
-          selectorType: selectorType,
-          attribute: attribute,
+      // 检查加载状态并生成 FetchItem
+      const { items, newLoadedImageMap } = await checkBookmarksLoadStatus(
+        matchedBookmarks,
+        config.id
+      );
+
+      // 更新已加载的图片映射
+      if (Object.keys(newLoadedImageMap).length > 0) {
+        get().updateLoadedImageMap(newLoadedImageMap);
+      }
+
+      // 只包含未加载的项目
+      const unloadedItems = items.filter(item => !item.isLoaded);
+      if (unloadedItems.length > 0) {
+        fetchTaskList.push({
+          config,
+          items: unloadedItems,
         });
       }
     }
 
-    // console.log("matchedUrlList in matchBookmarks: ", matchedUrlList);
     const res = {
-      matchedUrlList: matchedUrlList,
-      unStoredUrlList: unStoredUrlList,
-      matchedBookmarkList: matchedBookmarkList,
+      matchedBookmarks: allMatchedBookmarks,
+      fetchTaskList: fetchTaskList,
     };
     set(() => res);
     return res;
@@ -209,6 +198,49 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     set(() => ({ fetchConfigList: newConfigList }));
     await browser.storage.local.set({ [CONFIGS_KEY]: newConfigList });
   },
+  clearLoadedImageMap: () => {
+    set(() => ({ loadedImageMap: {} }));
+  },
+  setFetchStatus: (isFetching, total) => {
+    set((state) => ({
+      isFetching,
+      ...(total !== undefined ? { fetchTotal: total, fetchProgress: 0 } : {}),
+    }));
+  },
+  updateFetchProgress: (progress) => {
+    set(() => ({ fetchProgress: progress }));
+  },
+  loadSingleThumb: async (pageUrl) => {
+    try {
+      const storageData = await browser.storage.local.get(pageUrl);
+      const raw = storageData[pageUrl] as any;
+
+      if (raw && raw.length > 0) {
+        const buf = new Uint8Array(raw);
+        const blob = new Blob([buf.buffer], { type: "image/jpeg" });
+        const blobUrl = URL.createObjectURL(blob);
+
+        const bookmarkList = get().bookmarkList;
+        const newMapEntries: LoadedImageMap = {};
+
+        bookmarkList.forEach((bk) => {
+          if (bk.url === pageUrl) {
+            newMapEntries[bk.id] = blobUrl;
+          }
+        });
+
+        if (Object.keys(newMapEntries).length > 0) {
+          get().updateLoadedImageMap(newMapEntries);
+        }
+      }
+    } catch (e) {
+      console.error(`Error loading single thumb for ${pageUrl}:`, e);
+    }
+  },
+  stopFetching: () => {
+    browser.runtime.sendMessage({ type: "stopFetch" });
+    set(() => ({ isFetching: false }));
+  },
 });
 
 export const useStore = create<Store>()((...action) => ({
@@ -216,11 +248,13 @@ export const useStore = create<Store>()((...action) => ({
   bookmarkTree: null as BookmarkTreeNode | null,
   bookmarkList: [] as BookmarkTreeNode[],
   bookmarkMap: {} as BookmarkMap,
-  // matchedBookmarkList: [] as BookmarkTreeNode[],
-  matchedBookmarkList: [] as BookmarkTreeNode[][],
-  matchedUrlList: [] as MatchedUrl[],
-  unStoredUrlList: [] as UnstoredUrl[],
+  matchedBookmarks: [] as BookmarkTreeNode[],
+  fetchTaskList: [] as FetchTask[],
   loadedImageMap: {} as LoadedImageMap,
   fetchConfigList: [] as FetchConfig[],
+  // Fetch status init
+  isFetching: false,
+  fetchProgress: 0,
+  fetchTotal: 0,
   ...actionSlice(...action),
 }));

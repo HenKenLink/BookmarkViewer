@@ -1,36 +1,5 @@
-import { BookmarkTreeNode, PageUrl, LoadedImage, LoadedImageMap } from "../global/types";
+import { BookmarkTreeNode, BookmarkFetchItem, LoadedImageMap } from "../global/types";
 import { useStore } from "./store";
-
-// export function filterBookmarkByHostname(
-//   bookmarkList: BookmarkTreeNode[],
-//   matchPattern: MatchPattern
-// ): BookmarkTreeNode[] {
-//   if (matchPattern.hostname && matchPattern.regexPattern) {
-//     const hostname = matchPattern.hostname;
-//     const hostFilterRes = bookmarkList.filter((bk) => {
-//       const url = bk.url;
-//       if (url) {
-//         const urlHostname = new URL(url).hostname;
-//         // console.log("urlHostname: ", urlHostname);
-//         return urlHostname === hostname;
-//       } else {
-//         return false;
-//       }
-//     });
-//     const regFilterRes = hostFilterRes.filter((bk) => {
-//       const url = bk.url;
-//       const regexPattern = matchPattern.regexPattern as string;
-//       if (url) {
-//         const regex = new RegExp(regexPattern);
-//         // console.log("urlHostname: ", urlHostname);
-//         return regex.test(url);
-//       } else {
-//         return false;
-//       }
-//     });
-//     return regFilterRes
-//   }
-// }
 
 type MatchPattern = {
   hostname: string;
@@ -49,8 +18,6 @@ export function filterBookmarkByMatchPattern(
       const url = bk.url;
       if (url) {
         const urlHostname = new URL(url).hostname;
-        // console.log("Bookmark host: ", urlHostname);
-        // TODO: Hostname fuzzy match.
         return urlHostname === hostname;
       } else {
         return false;
@@ -64,7 +31,6 @@ export function filterBookmarkByMatchPattern(
 
       if (url) {
         const regex = new RegExp(regexPattern as string);
-        // console.log("urlHostname: ", urlHostname);
         return regex.test(url);
       } else {
         return false;
@@ -79,30 +45,17 @@ export function filterBookmarkByMatchPattern(
   return matchRes;
 }
 
-// export async function getBookmarksUrl(bookmarkList: BookmarkTreeNode[]): string[] {
-//   const urlList: string[] = [];
-//   bookmarkList.forEach((bk) => {
-//     urlList.push(bk.url as string);
-//   });
-//   return urlList;
-// }
-
-// Get pageUrl from bookmark and load image from local storage
-// Get pageUrl from bookmark and load image from local storage
-export async function loadPageUrlFromBookmarks(
-  bookmarkList: BookmarkTreeNode[]
-): Promise<{ pageUrlList: PageUrl[]; unStoredPageUrlList: string[] }> {
+// 检查书签的封面加载状态，返回 BookmarkFetchItem 列表
+export async function checkBookmarksLoadStatus(
+  bookmarkList: BookmarkTreeNode[],
+  configId: number
+): Promise<{ items: BookmarkFetchItem[]; newLoadedImageMap: LoadedImageMap }> {
   const loadedImageMap = useStore.getState().loadedImageMap;
-  const updateLoadedImageMap = useStore.getState().updateLoadedImageMap;
 
-  const unStoredUrlList: string[] = [];
+  const items: BookmarkFetchItem[] = [];
   const newLoadedImageMap: LoadedImageMap = {};
-  const pageUrlList: PageUrl[] = [];
 
-  // 1. Identify URLs that need checking (avoid fetching if we already have a blobUrl for this bookmark? 
-  // actually we need to check if the blobUrl is still valid? No, assumption is if in store, it's valid)
-  // But strictly, if we already have loadedImageMap[bk.id], we don't need to look at storage.
-
+  // 收集需要从 storage 检查的 URL
   const urlsToFetch = new Set<string>();
 
   for (const bk of bookmarkList) {
@@ -112,7 +65,7 @@ export async function loadPageUrlFromBookmarks(
     }
   }
 
-  // 2. Batch fetch from storage
+  // 批量从 storage 获取
   let storageData: Record<string, any> = {};
   if (urlsToFetch.size > 0) {
     try {
@@ -122,9 +75,8 @@ export async function loadPageUrlFromBookmarks(
     }
   }
 
-  // 3. Process bookmarks
-  // Cache created BlobURLs to avoid creating duplicates for same URL
-  const urlToBlobUrlRaw: Record<string, string> = {};
+  // 缓存已创建的 BlobURL 避免重复创建
+  const urlToBlobUrl: Record<string, string> = {};
 
   for (const bk of bookmarkList) {
     const purl = bk.url;
@@ -132,41 +84,32 @@ export async function loadPageUrlFromBookmarks(
 
     let isLoaded = false;
 
-    // Check if already in memory
+    // 检查内存中是否已加载
     if (loadedImageMap[bk.id]) {
       isLoaded = true;
     } else {
-      // Check storage result
+      // 检查 storage 中是否存在
       const raw = storageData[purl];
       if (raw && raw.length > 0) {
-        // Create or reuse BlobURL
-        if (!urlToBlobUrlRaw[purl]) {
+        // 创建或复用 BlobURL
+        if (!urlToBlobUrl[purl]) {
           const buf = new Uint8Array(raw);
           const blob = new Blob([buf.buffer], { type: "image/jpeg" });
-          urlToBlobUrlRaw[purl] = URL.createObjectURL(blob);
+          urlToBlobUrl[purl] = URL.createObjectURL(blob);
         }
 
-        newLoadedImageMap[bk.id] = urlToBlobUrlRaw[purl];
+        newLoadedImageMap[bk.id] = urlToBlobUrl[purl];
         isLoaded = true;
-      } else {
-        // Not in memory, not in storage
-        unStoredUrlList.push(purl);
       }
     }
 
-    pageUrlList.push({ url: purl, isLoaded });
+    items.push({
+      bookmarkId: bk.id,
+      pageUrl: purl,
+      configId,
+      isLoaded,
+    });
   }
 
-  // 4. Update store
-  if (Object.keys(newLoadedImageMap).length > 0) {
-    updateLoadedImageMap(newLoadedImageMap);
-  }
-
-  return { pageUrlList, unStoredPageUrlList: unStoredUrlList };
+  return { items, newLoadedImageMap };
 }
-
-// export async function filterStoredMatchedUrl(matchedUrlList: MatchedUrl[]): MatchedUrl[]{
-//   for (const matchedUrl of matchedUrlList){
-
-//   }
-// }

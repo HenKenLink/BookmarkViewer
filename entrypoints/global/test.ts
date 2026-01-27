@@ -5,27 +5,22 @@ import { CONFIGS_KEY } from "../options/consts";
 // 添加parentId会报错
 const testBookmarkList: CreateDetails[] = [
   {
-    index: 1,
     title: "Kenvin Nguyen & Tien Quan - BoyFriendTV.com",
     url: "https://www.boyfriendtv.com/videos/1255950/kenvin-nguyen-tien-quan-c3-teddy-teddy6859-c3-zero-s-men2024/",
   },
   {
-    index: 1,
     title: "Str8 guy shoots a big load - BoyFriendTV.com",
     url: "https://www.boyfriendtv.com/videos/1574084/str8-guy-shoots-a-big-load-riding-a-dildo/",
   },
   {
-    index: 1,
     title: "Nickoles A & YarddieStyle iGayVideos.TV",
     url: "https://www.igayvideos.tv/nickoles-a-yarddiestyle_2808271.html",
   },
   {
-    index: 1,
     title: "Loc Rios and David Christian (Dombeeef) fuck",
     url: "https://justthegays.tv/video/loc-rios-and-david-christian-dombeeef-fuck-91",
   },
   {
-    index: 1,
     title: "TheRealKingCock fucks Jaxx Cody (jaxx_cody)",
     url: "https://gayforfans.com/video/therealkingcock-fucks-jaxx-cody-jaxx_cody-1763044888/",
   },
@@ -34,6 +29,7 @@ const testBookmarkList: CreateDetails[] = [
 // https://www.boyfriendtv.com/es/videos/1301842/bottom-takes-a-monstercock-in-her-big-ass/
 
 export async function testAddBookmarks() {
+  console.log("[Test] Starting to add test bookmarks...");
   for (const bk of testBookmarkList) {
     try {
       // Check if bookmark already exists to avoid redundant additions

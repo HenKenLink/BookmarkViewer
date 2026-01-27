@@ -5,9 +5,8 @@ export default defineConfig({
   modules: ["@wxt-dev/module-react"],
   vite: (configEnv) => ({
     define: {
-      // __DEV__: configEnv.mode === "production" ? false : true,
-      __DEV__: true,
-      __CHROME__: true,
+      __DEV__: configEnv.mode === "development",
+      __CHROME__: configEnv.browser === "chrome",
     },
   }),
   manifest: {
@@ -25,5 +24,12 @@ export default defineConfig({
       "downloads",
     ],
     host_permissions: ["<all_urls>"],
+  },
+  webExt: {
+    browserConsole: true,
+    binaries: {
+      chrome: "/usr/bin/brave-browser",
+      firefox: "/usr/bin/librewolf",
+    },
   },
 });

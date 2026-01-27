@@ -9,31 +9,21 @@ export type LoadedImage = {
   blobUrl: string;
 };
 
-export type PageUrl = { url: string; isLoaded: boolean };
-
-export type MatchedUrl = {
+// 每个待获取封面的书签项
+export type BookmarkFetchItem = {
+  bookmarkId: string;
+  pageUrl: string;
   configId: number;
-  hostname: string;
-  pageUrlList: PageUrl[];
-  fetchScript?: string;
-  mode: FetchMode;
-  selector?: string;
-  selectorType?: SelectorType;
-  attribute?: string;
+  isLoaded: boolean;
 };
 
 export type FetchMode = "inject" | "simple";
 export type SelectorType = "regex" | "css" | "xpath";
 
-export type UnstoredUrl = {
-  configId: number;
-  hostname: string;
-  pageUrlList: string[];
-  fetchScript?: string;
-  mode?: FetchMode;
-  selector?: string;
-  selectorType?: SelectorType;
-  attribute?: string;
+// 按配置分组的获取任务
+export type FetchTask = {
+  config: FetchConfig;
+  items: BookmarkFetchItem[];
 };
 
 export type FetchConfig = {

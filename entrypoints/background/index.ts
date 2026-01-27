@@ -4,7 +4,7 @@ import {
   testStorageConfig,
   // testGetScript,
 } from "../global/test";
-import { MatchedUrl, UnstoredUrl } from "../global/types";
+import { FetchTask, FetchConfig } from "../global/types";
 
 import { waitForTabLoad, filterUnloadPageUrl } from "../global/globalUtils";
 import { useStore } from "../options/store";
@@ -146,21 +146,50 @@ function dynamicExecutor(script: string, ...args: any[]): Function {
   }
 }
 
-browser.runtime.onMessage.addListener(async (message, sender) => {
-  if (message.type === messageId.getThumb) {
-    const unStoredUrlList: UnstoredUrl[] = message.unStoredUrlList;
+// Flag to control fetch cancellation
+let isFetchStopped = false;
 
-    for (const url of unStoredUrlList) {
-      console.log(`[Background] Getting thumbnails for: ${url.hostname}`);
-      const pageUrlList: string[] = url.pageUrlList;
-      const script = url.fetchScript;
-      const mode = url.mode || "inject";
-      const selector = url.selector;
+browser.runtime.onMessage.addListener(async (message, sender) => {
+  if (message.type === messageId.stopFetch) {
+    isFetchStopped = true;
+    console.log("[Background] Fetch stop requested");
+    return;
+  }
+
+  if (message.type === messageId.getThumb) {
+    isFetchStopped = false;
+    const fetchTaskList: FetchTask[] = message.fetchTaskList;
+
+    // Calculate total items
+    let totalItems = 0;
+    for (const task of fetchTaskList) {
+      totalItems += task.items.length;
+    }
+
+    // Send fetch started message
+    browser.runtime.sendMessage({
+      type: messageId.fetchStarted,
+      total: totalItems,
+    });
+
+    let currentProgress = 0;
+
+    for (const task of fetchTaskList) {
+      if (isFetchStopped) break;
+
+      const config = task.config;
+      const pageUrlList = task.items.map(item => item.pageUrl);
+
+      console.log(`[Background] Getting thumbnails for: ${config.hostname}`);
+
+      const script = config.fetchScript;
+      const mode = config.mode || "inject";
+      const selector = config.selector;
 
       let thumbList: Thumb[] = [];
 
       if (mode === "inject" && script) {
-        const hostname = url.hostname;
+        const hostname = config.hostname;
         const tabUrl = `https://${hostname}`;
         const tab = await browser.tabs.create({
           url: tabUrl,
@@ -185,23 +214,42 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         thumbList = await fetchSimpleThumb(
           pageUrlList,
           selector,
-          url.selectorType || "regex",
-          url.attribute
+          config.selectorType || "regex",
+          config.attribute
         );
       }
 
+      // Save and notify for each thumb individually
       for (const thumb of thumbList) {
+        if (isFetchStopped) break;
+
         await saveThumb(thumb);
+        currentProgress++;
+
+        // Send single thumb finished message
+        browser.runtime.sendMessage({
+          type: messageId.singleThumbFinished,
+          pageUrl: thumb.pageUrl,
+          progress: currentProgress,
+          total: totalItems,
+        });
       }
     }
+
+    if (isFetchStopped) {
+      browser.runtime.sendMessage({ type: messageId.fetchStopped });
+    } else {
+      browser.runtime.sendMessage({ type: messageId.getThumbfinished });
+    }
   }
-  browser.runtime.sendMessage({ type: messageId.getThumbfinished });
 });
 
 export default defineBackground(async () => {
+  console.log(`[Background] Initializing. DEV: ${__DEV__}, CHROME: ${__CHROME__}`);
   await testStorageConfig();
 
   if (__DEV__) {
+    console.log("[Background] Running in DEV mode, adding test data...");
     openUI();
     await testAddBookmarks();
   }
