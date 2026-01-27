@@ -19,12 +19,15 @@ import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
 import AutoFixHighIcon from "@mui/icons-material/AutoFixHigh";
 import AutoFixOffIcon from "@mui/icons-material/AutoFixOff";
+import CloudDownloadIcon from "@mui/icons-material/CloudDownload";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 
 import { Link } from "react-router-dom";
 
 import { NavItem } from "@/entrypoints/global/types";
 
 import { useStore } from "../store";
+import { exportCovers, importCovers } from "../utils/exportImport";
 
 const drawerWidth = 240;
 
@@ -37,6 +40,9 @@ interface NavProps {
 export function NavBar(props: NavProps) {
   const setSetting = useStore((state) => state.setSetting);
   const setting = useStore((state) => state.setting);
+  const bookmarkMap = useStore((state) => state.bookmarkMap);
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const { window } = props;
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -51,6 +57,21 @@ export function NavBar(props: NavProps) {
 
   const toggleAnimations = async () => {
     await setSetting({ enableAnimations: !setting.enableAnimations });
+  };
+
+  const handleExport = async () => {
+    await exportCovers();
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      await importCovers(e.target.files[0], bookmarkMap, (msg) => alert(msg));
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const drawer = (
@@ -114,6 +135,23 @@ export function NavBar(props: NavProps) {
               ))}
             </Box>
             <Box>
+              <input
+                type="file"
+                accept=".zip"
+                ref={fileInputRef}
+                style={{ display: "none" }}
+                onChange={handleFileChange}
+              />
+              <Tooltip title="Export Covers">
+                <IconButton color="inherit" onClick={handleExport}>
+                  <CloudDownloadIcon />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Import Covers">
+                <IconButton color="inherit" onClick={handleImportClick}>
+                  <CloudUploadIcon />
+                </IconButton>
+              </Tooltip>
               <Tooltip title={setting.enableAnimations ? "Disable Animations" : "Enable Animations"}>
                 <IconButton
                   color="inherit"

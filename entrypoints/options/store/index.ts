@@ -33,6 +33,9 @@ type storeState = {
   isFetching: boolean;
   fetchProgress: number;
   fetchTotal: number;
+  sidebarOpen: boolean;
+  selectedFolderId: string;
+  expandedFolderIds: string[];
 };
 
 type storeAction = {
@@ -54,6 +57,9 @@ type storeAction = {
   updateFetchProgress: (progress: number) => void;
   loadSingleThumb: (pageUrl: string) => Promise<void>;
   stopFetching: () => void;
+  setSelectedFolderId: (id: string) => void;
+  setSidebarOpen: (open: boolean) => void;
+  setExpandedFolderIds: (ids: string[]) => void;
 };
 
 type Store = storeState & storeAction;
@@ -74,7 +80,12 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     const result = await browser.storage.local.get(SETTINGS_KEY);
     const storedSetting: Setting | undefined = result[SETTINGS_KEY] as Setting | undefined;
     if (storedSetting) {
-      set(() => ({ setting: storedSetting }));
+      set(() => ({
+        setting: storedSetting,
+        sidebarOpen: storedSetting.sidebarOpen ?? true,
+        selectedFolderId: storedSetting.selectedFolderId ?? "all",
+        expandedFolderIds: storedSetting.expandedFolderIds ?? []
+      }));
     }
   },
   loadBookmarkTree: async () => {
@@ -241,6 +252,18 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     browser.runtime.sendMessage({ type: "stopFetch" });
     set(() => ({ isFetching: false }));
   },
+  setSelectedFolderId: (id: string) => {
+    set(() => ({ selectedFolderId: id }));
+    get().setSetting({ selectedFolderId: id });
+  },
+  setSidebarOpen: (open: boolean) => {
+    set(() => ({ sidebarOpen: open }));
+    get().setSetting({ sidebarOpen: open });
+  },
+  setExpandedFolderIds: (ids: string[]) => {
+    set(() => ({ expandedFolderIds: ids }));
+    get().setSetting({ expandedFolderIds: ids });
+  },
 });
 
 export const useStore = create<Store>()((...action) => ({
@@ -256,5 +279,8 @@ export const useStore = create<Store>()((...action) => ({
   isFetching: false,
   fetchProgress: 0,
   fetchTotal: 0,
+  sidebarOpen: true,
+  selectedFolderId: "all",
+  expandedFolderIds: [],
   ...actionSlice(...action),
 }));

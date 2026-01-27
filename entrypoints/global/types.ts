@@ -44,6 +44,9 @@ export type NavItem = {
 };
 
 export type Setting = {
-  darkMode: Boolean;
+  darkMode: boolean;
   enableAnimations: boolean;
+  sidebarOpen: boolean;
+  selectedFolderId: string;
+  expandedFolderIds: string[];
 };

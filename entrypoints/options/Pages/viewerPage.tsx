@@ -9,9 +9,12 @@ import {
 import { ImageTextCard } from "../Components/ImageTextCard";
 import { BoxItem } from "../Components/PageItem";
 
-import { Box, Typography, Button, Toolbar, TextField, InputAdornment, IconButton } from "@mui/material";
+import { Box, Typography, Button, Toolbar, TextField, InputAdornment, IconButton, useMediaQuery, useTheme, Drawer, Divider, Stack } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
+import MenuIcon from "@mui/icons-material/Menu";
+import { FolderTree } from "../Components/FolderTree";
+import { FolderCard } from "../Components/FolderCard";
 
 import { NavBar } from "../Components/NavBar";
 import LaunchIcon from "@mui/icons-material/Launch";
@@ -65,8 +68,18 @@ export function ViewerPage() {
   const updateFetchProgress = useStore((state) => state.updateFetchProgress);
   const loadSingleThumb = useStore((state) => state.loadSingleThumb);
   const stopFetching = useStore((state) => state.stopFetching);
+  const selectedFolderId = useStore((state) => state.selectedFolderId);
+  const setSelectedFolderId = useStore((state) => state.setSelectedFolderId);
+  const bookmarkMap = useStore((state) => state.bookmarkMap);
 
   const [searchQuery, setSearchQuery] = useState("");
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const sidebarOpen = useStore((state) => state.sidebarOpen);
+  const setSidebarOpen = useStore((state) => state.setSidebarOpen);
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const startMatchBookmarks = async () => {
     await matchBookmarks();
@@ -124,104 +137,254 @@ export function ViewerPage() {
     return loadedImageMap[bkId] || "";
   };
 
-  const filteredBookmarks = matchedBookmarks.filter((bk) => {
-    const title = bk.title.toLowerCase();
-    const url = (bk.url || "").toLowerCase();
+  // Identify folders that contain matched bookmarks in their subtree
+  const matchedFolderIds = useMemo(() => {
+    const ids = new Set<string>();
+    const parentMap: Record<string, string> = {};
+    const buildParentMap = (node: BookmarkTreeNode) => {
+      if (node.children) {
+        node.children.forEach(child => {
+          parentMap[child.id] = node.id;
+          buildParentMap(child);
+        });
+      }
+    };
+    const root = useStore.getState().bookmarkTree;
+    if (root) buildParentMap(root);
+
+    matchedBookmarks.forEach(bk => {
+      let currentId = parentMap[bk.id];
+      while (currentId) {
+        ids.add(currentId);
+        currentId = parentMap[currentId];
+      }
+    });
+
+    return ids;
+  }, [matchedBookmarks]);
+
+  const folderCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    const parentMap: Record<string, string> = {};
+    const buildParentMap = (node: BookmarkTreeNode) => {
+      if (node.children) {
+        node.children.forEach(child => {
+          parentMap[child.id] = node.id;
+          buildParentMap(child);
+        });
+      }
+    };
+    const root = useStore.getState().bookmarkTree;
+    if (root) buildParentMap(root);
+
+    matchedBookmarks.forEach(bk => {
+      let currentId = parentMap[bk.id];
+      while (currentId) {
+        counts[currentId] = (counts[currentId] || 0) + 1;
+        currentId = parentMap[currentId];
+      }
+    });
+    return counts;
+  }, [matchedBookmarks]);
+
+  const displayItems = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    return title.includes(query) || url.includes(query);
-  });
+
+    // 1. If searching, show flattened results from matchedBookmarks
+    if (query) {
+      return matchedBookmarks.filter(bk =>
+        bk.title.toLowerCase().includes(query) || (bk.url || "").toLowerCase().includes(query)
+      ).map(bk => ({ type: 'bookmark' as const, data: bk }));
+    }
+
+    // 2. If 'All Bookmarks', show all matched bookmarks flattened
+    if (selectedFolderId === "all") {
+      return matchedBookmarks.map(bk => ({ type: 'bookmark' as const, data: bk }));
+    }
+
+    // 3. Explorer view: show direct children of the selected folder
+    const currentFolder = bookmarkMap[selectedFolderId];
+    if (!currentFolder || !currentFolder.children) return [];
+
+    const items: ({ type: 'bookmark' | 'folder', data: BookmarkTreeNode })[] = [];
+
+    currentFolder.children.forEach(child => {
+      if (child.url) {
+        // Only show if it matches the config (is in matchedBookmarks)
+        if (matchedBookmarks.some(mb => mb.id === child.id)) {
+          items.push({ type: 'bookmark', data: child });
+        }
+      } else {
+        // Only show if it contains matched bookmarks in its subtree
+        if (matchedFolderIds.has(child.id)) {
+          items.push({ type: 'folder', data: child });
+        }
+      }
+    });
+
+    return items;
+  }, [selectedFolderId, matchedBookmarks, searchQuery, bookmarkMap, matchedFolderIds]);
 
   return (
-    <Box>
-      <BoxItem
+    <Box sx={{ display: "flex", minHeight: "100vh" }}>
+      {/* Sidebar for Desktop */}
+      {!isMobile && sidebarOpen && (
+        <Box
+          sx={{
+            width: 280,
+            minWidth: 280,
+            borderRight: "1px solid",
+            borderColor: "divider",
+            height: "100vh",
+            position: "sticky",
+            top: 0,
+            overflowY: "auto",
+            p: 2,
+            bgcolor: "background.paper"
+          }}
+        >
+          <Typography variant="overline" sx={{ px: 1, fontWeight: 700, color: "text.secondary" }}>
+            Folders
+          </Typography>
+          <FolderTree />
+        </Box>
+      )}
+
+      {/* Drawer for Mobile */}
+      <Drawer
+        variant="temporary"
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        ModalProps={{ keepMounted: true }}
         sx={{
-          gap: 1,
-          py: 3,
-          px: 1,
-          borderBottom: "1px solid",
-          borderColor: "divider",
-          mb: 4
+          display: { xs: "block", md: "none" },
+          "& .MuiDrawer-paper": { boxSizing: "border-box", width: 280, p: 2 },
         }}
-        justifyContent={"space-between"}
       >
-        <Typography variant="h5" sx={{ fontWeight: 700, color: "text.primary" }}>
-          Captured Bookmarks
+        <Typography variant="h6" sx={{ px: 1, mb: 2, fontWeight: 700 }}>
+          Folders
         </Typography>
-        {isFetching ? (
-          <FetchProgress
-            isFetching={isFetching}
-            progress={fetchProgress}
-            total={fetchTotal}
-            onStop={() => {
-              stopFetching();
+        <FolderTree />
+      </Drawer>
+
+      {/* Main Content */}
+      <Box sx={{ flexGrow: 1, p: 3, maxWidth: "100%", overflowX: "hidden" }}>
+        <BoxItem
+          sx={{
+            gap: 1,
+            py: 2,
+            px: 1,
+            borderBottom: "1px solid",
+            borderColor: "divider",
+            mb: 4,
+            flexWrap: { xs: "wrap", sm: "nowrap" }
+          }}
+          justifyContent={"space-between"}
+        >
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <IconButton
+              onClick={() => isMobile ? setMobileOpen(true) : setSidebarOpen(!sidebarOpen)}
+              sx={{ mr: 1 }}
+            >
+              <MenuIcon />
+            </IconButton>
+            <Typography variant="h5" sx={{ fontWeight: 700, color: "text.primary" }}>
+              Captured
+            </Typography>
+          </Stack>
+          {isFetching ? (
+            <FetchProgress
+              isFetching={isFetching}
+              progress={fetchProgress}
+              total={fetchTotal}
+              onStop={() => {
+                stopFetching();
+              }}
+            />
+          ) : (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<LaunchIcon />}
+              onClick={async () => {
+                await startGetThumb(fetchTaskList);
+              }}
+              sx={{ borderRadius: 2, px: 3 }}
+            >
+              Fetch Thumbnails
+            </Button>
+          )}
+        </BoxItem>
+
+        <Box sx={{ mb: 3, px: 1 }}>
+          <TextField
+            fullWidth
+            variant="outlined"
+            placeholder="Search bookmarks by title or URL..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <SearchIcon color="action" />
+                  </InputAdornment>
+                ),
+                endAdornment: searchQuery && (
+                  <InputAdornment position="end">
+                    <IconButton
+                      size="small"
+                      onClick={() => setSearchQuery("")}
+                      edge="end"
+                    >
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{
+              "& .MuiOutlinedInput-root": {
+                borderRadius: 3,
+                backgroundColor: "background.paper",
+              }
             }}
           />
-        ) : (
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<LaunchIcon />}
-            onClick={async () => {
-              await startGetThumb(fetchTaskList);
-            }}
-            sx={{ borderRadius: 2, px: 3 }}
-          >
-            Fetch Thumbnails
-          </Button>
-        )}
-      </BoxItem>
+        </Box>
 
-      <Box sx={{ mb: 3, px: 1 }}>
-        <TextField
-          fullWidth
-          variant="outlined"
-          placeholder="Search bookmarks by title or URL..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          slotProps={{
-            input: {
-              startAdornment: (
-                <InputAdornment position="start">
-                  <SearchIcon color="action" />
-                </InputAdornment>
-              ),
-              endAdornment: searchQuery && (
-                <InputAdornment position="end">
-                  <IconButton
-                    size="small"
-                    onClick={() => setSearchQuery("")}
-                    edge="end"
-                  >
-                    <ClearIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ),
-            },
-          }}
-          sx={{
-            "& .MuiOutlinedInput-root": {
-              borderRadius: 3,
-              backgroundColor: "background.paper",
+        <Box sx={{ pb: 8 }}>
+          {displayItems.length === 0 && (
+            <Box sx={{ py: 10, textAlign: "center", color: "text.secondary" }}>
+              <Typography variant="body1">No items found in this folder matching your configs.</Typography>
+            </Box>
+          )}
+          {displayItems.map((item) => {
+            const bk = item.data;
+            if (item.type === 'folder') {
+              return (
+                <FolderCard
+                  key={bk.id}
+                  title={bk.title}
+                  itemCount={folderCounts[bk.id]}
+                  onClick={() => setSelectedFolderId(bk.id)}
+                />
+              );
             }
-          }}
-        />
-      </Box>
 
-      <Box sx={{ pb: 8 }}>
-        {filteredBookmarks.map((bk) => {
-          const id = bk.id;
-          const title = bk.title;
-          const url = bk.url as string;
-          const thumbBlobUrl = getThumbSrc(id);
-          return (
-            <ImageTextCard
-              key={id}
-              image={thumbBlobUrl}
-              title={title}
-              url={url}
-            />
-          );
-        })}
+            const id = bk.id;
+            const title = bk.title;
+            const url = bk.url as string;
+            const thumbBlobUrl = getThumbSrc(id);
+            return (
+              <ImageTextCard
+                key={id}
+                image={thumbBlobUrl}
+                title={title}
+                url={url}
+              />
+            );
+          })}
+        </Box>
       </Box>
     </Box>
   );
