@@ -13,17 +13,25 @@ const testBookmarkList: CreateDetails[] = [
     url: "https://www.boyfriendtv.com/videos/1574084/str8-guy-shoots-a-big-load-riding-a-dildo/",
   },
   {
-    title: "Nickoles A & YarddieStyle iGayVideos.TV",
-    url: "https://www.igayvideos.tv/nickoles-a-yarddiestyle_2808271.html",
+    title: "Han Fucked By Two Muscle Big Dick Daddies",
+    url: "https://www.boyfriendtv.com/videos/1471832/han-fucked-by-two-muscle-big-dick-daddies/?tag=asian%20muscle%20men",
   },
   {
-    title: "Loc Rios and David Christian (Dombeeef) fuck",
-    url: "https://justthegays.tv/video/loc-rios-and-david-christian-dombeeef-fuck-91",
-  },
-  {
-    title: "TheRealKingCock fucks Jaxx Cody (jaxx_cody)",
-    url: "https://gayforfans.com/video/therealkingcock-fucks-jaxx-cody-jaxx_cody-1763044888/",
-  },
+    title: "Big black cock takes ownership of that ass",
+    url: "https://www.boyfriendtv.com/videos/1574977/big-black-cock-takes-ownership-of-that-ass/?tag=big%20cock%20asian%20body%20builders%20gangbang%20interracial%20rimming%20blowjob%20bareback%20gay%20sex%20creampie%20double%20penetration%20muscle%20black%20chinese%20nipple%20sucking",
+  }
+  // {
+  //   title: "Nickoles A & YarddieStyle iGayVideos.TV",
+  //   url: "https://www.igayvideos.tv/nickoles-a-yarddiestyle_2808271.html",
+  // },
+  // {
+  //   title: "Loc Rios and David Christian (Dombeeef) fuck",
+  //   url: "https://justthegays.tv/video/loc-rios-and-david-christian-dombeeef-fuck-91",
+  // },
+  // {
+  //   title: "TheRealKingCock fucks Jaxx Cody (jaxx_cody)",
+  //   url: "https://gayforfans.com/video/therealkingcock-fucks-jaxx-cody-jaxx_cody-1763044888/",
+  // },
 ];
 
 // https://www.boyfriendtv.com/es/videos/1301842/bottom-takes-a-monstercock-in-her-big-ass/
@@ -111,24 +119,27 @@ function extractThumbUrl(html) {
 }
 
 async function fetchThumb(pageUrlList) {
-  const thumbList = [];
+  const results = [];
   for (const pageUrl of pageUrlList) {
-    const data = await fetchHtml(pageUrl);
-    const thumbUrl = extractThumbUrl(data);
-    if (!thumbUrl) {
-      console.log("Fail to get thumbUrl, continue.");
-      continue;
+    try {
+      const data = await fetchHtml(pageUrl);
+      const thumbUrl = extractThumbUrl(data);
+      if (!thumbUrl) {
+        console.log("Fail to get thumbUrl, continue.");
+        continue;
+      }
+      const thumb = { pageUrl: pageUrl, thumbUrl: thumbUrl };
+      results.push(thumb);
+    } catch (e) {
+      console.error("Fail to fetch thumb for:", pageUrl, e);
     }
-    const thumb = { pageUrl: pageUrl, thumbUrl: thumbUrl };
-    thumbList.push(thumb);
   }
-  return thumbList;
+  return results;
 }
 async function main(pageUrlList) {
   console.log("Start to run inject scripts.");
-  const thumbList = await fetchThumb(pageUrlList);
-  console.log("Script execute result -> thumbList: ", thumbList);
-  return thumbList;
+  const results = await fetchThumb(pageUrlList);
+  return { status: "finished", results: results };
 }
 
 return main(pageUrlList);

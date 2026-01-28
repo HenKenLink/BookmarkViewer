@@ -47,16 +47,23 @@ const HeaderBox = styled(Box, {
     ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${alpha(theme.palette.primary.dark, 0.8)} 100%)`
     : `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.3)} 0%, ${alpha(theme.palette.primary.dark, 0.5)} 100%)`,
   borderRadius: 20,
-  padding: theme.spacing(4),
+  padding: theme.spacing(3),
   marginBottom: theme.spacing(4),
   display: "flex",
+  flexDirection: "row",
   justifyContent: "space-between",
   alignItems: "center",
+  gap: theme.spacing(2),
   boxShadow: theme.palette.mode === "light"
     ? "0 10px 40px rgba(25, 118, 210, 0.2)"
     : "0 10px 40px rgba(0, 0, 0, 0.4)",
   position: "relative",
   overflow: "hidden",
+  [theme.breakpoints.down('sm')]: {
+    flexDirection: "column",
+    alignItems: "flex-start",
+    padding: theme.spacing(2.5),
+  },
   "&::before": {
     content: '""',
     position: "absolute",
@@ -131,6 +138,11 @@ const ActionButton = styled(Button)(({ theme }) => ({
   textTransform: "none",
   boxShadow: "none",
   transition: "all 0.2s ease",
+  whiteSpace: "nowrap",
+  [theme.breakpoints.down('sm')]: {
+    padding: theme.spacing(0.8, 2),
+    fontSize: "0.875rem",
+  },
   "&:hover": {
     transform: "translateY(-2px)",
     boxShadow: theme.palette.mode === "light"
@@ -174,7 +186,7 @@ export function ConfigPage() {
   const toggleDisplay = isMutiSelect ? "flex" : "none";
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1000, mx: "auto" }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, pt: { xs: 1, md: 1 }, maxWidth: 1000, mx: "auto" }}>
       {/* Modern Header Area */}
       <HeaderBox enableAnimations={setting.enableAnimations}>
         <Box sx={{ zIndex: 1 }}>
@@ -209,7 +221,7 @@ export function ConfigPage() {
             variant="body2"
             sx={{
               color: "rgba(255, 255, 255, 0.8)",
-              ml: 8,
+              ml: { xs: 0, sm: 8 },
               fontWeight: 500,
             }}
           >
@@ -217,7 +229,16 @@ export function ConfigPage() {
           </Typography>
         </Box>
 
-        <Stack direction="row" spacing={1.5} sx={{ zIndex: 1 }}>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            zIndex: 1,
+            flexWrap: "wrap",
+            width: { xs: "100%", sm: "auto" },
+            justifyContent: { xs: "flex-start", sm: "flex-end" }
+          }}
+        >
           {!isMutiSelect ? (
             <ActionButton
               variant="contained"

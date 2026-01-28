@@ -112,12 +112,7 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     }));
   },
   matchBookmarks: async () => {
-    let configList = get().fetchConfigList;
-
-    if (!configList || configList.length === 0) {
-      await get().loadFetchConfig();
-      configList = get().fetchConfigList;
-    }
+    const configList = get().fetchConfigList;
 
     const bookmarkList = get().bookmarkList;
     if (!bookmarkList) {
@@ -127,7 +122,7 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     const allMatchedBookmarks: BookmarkTreeNode[] = [];
     const fetchTaskList: FetchTask[] = [];
 
-    for (const config of configList) {
+    for (const config of (configList || [])) {
       const { hostname, regexPattern } = config;
 
       // 筛选匹配的书签
@@ -173,12 +168,12 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
   },
   loadFetchConfig: async () => {
     const raw = await browser.storage.local.get(CONFIGS_KEY);
-    const fetchConfigList: FetchConfig[] = raw[CONFIGS_KEY] as FetchConfig[];
+    const fetchConfigList: FetchConfig[] = (raw[CONFIGS_KEY] as FetchConfig[]) || [];
     set(() => ({ fetchConfigList: fetchConfigList }));
   },
   setFetchConfig: async (newConfig, isUpdate) => {
     let newConfigList: FetchConfig[] = [];
-    const configList = get().fetchConfigList;
+    const configList = get().fetchConfigList || [];
     if (isUpdate) {
       const exists = configList.some((cfg) => cfg.id === newConfig.id);
       if (!exists) {
@@ -267,7 +262,14 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
 });
 
 export const useStore = create<Store>()((...action) => ({
-  setting: { darkMode: false, enableAnimations: true } as Setting,
+  setting: {
+    darkMode: false,
+    enableAnimations: true,
+    fetchDelayCount: 5,
+    fetchDelayTimeMin: 1000,
+    fetchDelayTimeMax: 3000,
+    enableDelay: true
+  } as Setting,
   bookmarkTree: null as BookmarkTreeNode | null,
   bookmarkList: [] as BookmarkTreeNode[],
   bookmarkMap: {} as BookmarkMap,

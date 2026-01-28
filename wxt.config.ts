@@ -11,7 +11,7 @@ export default defineConfig({
   }),
   manifest: {
     name: "Bookmark Viewer",
-    version: "0.0.12",
+    version: "0.0.1",
     action: {
       default_icon: "/icon/48.png",
     },
@@ -29,7 +29,6 @@ export default defineConfig({
     browserConsole: true,
     binaries: {
       chrome: "/usr/bin/brave-browser",
-      firefox: "/usr/bin/librewolf",
     },
   },
 });

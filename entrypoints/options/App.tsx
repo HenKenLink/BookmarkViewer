@@ -1,6 +1,7 @@
 import { HashRouter as Router, Routes, Route } from "react-router-dom";
-import { Box } from "@mui/material";
+import { Box, CssBaseline } from "@mui/material";
 import { NavBar } from "./Components/NavBar";
+import { useState, useEffect } from "react";
 
 import { ViewerPage } from "./Pages/viewerPage";
 import { ConfigPage } from "./Pages/configPage";
@@ -15,7 +16,7 @@ import { Toaster } from "sonner";
 
 const navItemList: NavItem[] = [
   {
-    name: "Home",
+    name: "Viewer",
     path: "/",
   },
   {
@@ -54,21 +55,13 @@ const lightTheme = createTheme({
         size: "medium",
       },
     },
-    MuiCard: {
-      styleOverrides: {
-        root: {},
-      },
-      defaultProps: {},
-    },
     MuiTypography: {
       styleOverrides: {
         root: {
           "&.card-title": {
             fontSize: 20,
             fontWeight: 400,
-            // color: "#1976d2",
             marginBottom: 2,
-
             overflow: "hidden",
             textOverflow: "ellipsis",
             display: "-webkit-box",
@@ -105,12 +98,6 @@ const darkTheme = createTheme({
         size: "medium",
       },
     },
-    MuiCard: {
-      styleOverrides: {
-        root: {},
-      },
-      defaultProps: {},
-    },
   },
 });
 
@@ -130,20 +117,17 @@ export default function App() {
     setMode(setting.darkMode ? "dark" : "light");
   }, [setting]);
 
-  // setMode("light");
-
   return (
     <ThemeProvider theme={theme}>
+      <CssBaseline />
       <Toaster />
       <Router>
         <Box
           sx={{
-            // backgroundColor: "#f5f5f5",
             minHeight: "100vh",
-            padding: 2,
           }}
         >
-          <NavBar title="BookmarkViewer" navItemList={navItemList}></NavBar>
+          <NavBar navItemList={navItemList} />
           <Routes>
             <Route path="/" element={<ViewerPage />} />
             <Route path="/config" element={<ConfigPage />} />

@@ -49,4 +49,8 @@ export type Setting = {
   sidebarOpen: boolean;
   selectedFolderId: string;
   expandedFolderIds: string[];
+  fetchDelayCount: number;
+  fetchDelayTimeMin: number;
+  fetchDelayTimeMax: number;
+  enableDelay: boolean;
 };

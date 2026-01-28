@@ -33,7 +33,6 @@ const drawerWidth = 240;
 
 interface NavProps {
   window?: () => Window;
-  title: string;
   navItemList: NavItem[];
 }
 
@@ -67,9 +66,7 @@ export function NavBar(props: NavProps) {
 
   const drawer = (
     <Box onClick={handleDrawerToggle} sx={{ textAlign: "center" }}>
-      <Typography variant="h6" sx={{ my: 2 }}>
-        {props.title}
-      </Typography>
+
       <Divider />
       <List>
         {props.navItemList.map((item) => (
@@ -94,32 +91,47 @@ export function NavBar(props: NavProps) {
     <>
       <Box sx={{ display: "flex" }}>
         <CssBaseline />
-        <AppBar component="nav">
-          <Toolbar>
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              edge="start"
-              onClick={handleDrawerToggle}
-              sx={{ mr: 2, display: { sm: "none" } }}
-            >
-              <MenuIcon />
-            </IconButton>
-            <Typography
-              variant="h6"
-              component="div"
-              sx={{ flexGrow: 1, display: { xs: "none", sm: "block" } }}
-            >
-              {props.title}
-            </Typography>
-            <Box sx={{ flexGrow: 1, display: { xs: "none", sm: "block" } }}>
+        <AppBar
+          component="nav"
+          position="sticky"
+          sx={{
+            background: (theme) => theme.palette.mode === 'light'
+              ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`
+              : `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.background.paper} 100%)`,
+            boxShadow: (theme) => theme.palette.mode === 'light'
+              ? '0 8px 32px rgba(25, 118, 210, 0.25)'
+              : '0 8px 32px rgba(0, 0, 0, 0.4)',
+            color: 'white',
+          }}
+        >
+          <Toolbar variant="dense" sx={{ justifyContent: "space-between" }}>
+            <Box sx={{ display: { xs: "none", sm: "flex" }, gap: 2 }}>
               {props.navItemList.map((item) => (
                 <Button
                   key={item.name}
-                  sx={{ color: "#fff" }}
                   component={Link}
                   to={item.path}
                   variant="text"
+                  sx={{
+                    color: "rgba(255, 255, 255, 0.9)",
+                    borderRadius: "12px",
+                    px: 3,
+                    py: 1,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    fontSize: "0.95rem",
+                    transition: "all 0.2s ease-in-out",
+                    "&:hover": {
+                      backgroundColor: "rgba(255, 255, 255, 0.2)",
+                      transform: "translateY(-1px)",
+                      color: "white",
+                    },
+                    "&.active": {
+                      backgroundColor: "rgba(255, 255, 255, 0.25)",
+                      color: "white",
+                      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.2)",
+                    }
+                  }}
                 >
                   {item.name}
                 </Button>
@@ -127,27 +139,52 @@ export function NavBar(props: NavProps) {
             </Box>
             <Box>
               <Tooltip title="Backup & Restore">
-                <IconButton color="inherit" onClick={handleOpenBackupDialog}>
+                <IconButton
+                  onClick={handleOpenBackupDialog}
+                  sx={{
+                    color: "white",
+                    "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.15)" }
+                  }}
+                >
                   <SettingsBackupRestoreIcon />
                 </IconButton>
               </Tooltip>
               <Tooltip title={setting.enableAnimations ? "Disable Animations" : "Enable Animations"}>
                 <IconButton
-                  color="inherit"
                   onClick={toggleAnimations}
-                  sx={{ ml: 1 }}
+                  sx={{
+                    ml: 1,
+                    color: "white",
+                    "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.15)" }
+                  }}
                 >
                   {setting.enableAnimations ? <AutoFixHighIcon /> : <AutoFixOffIcon />}
                 </IconButton>
               </Tooltip>
               <IconButton
-                color="inherit"
                 onClick={toggleDarkMode}
-                sx={{ ml: 1 }}
+                sx={{
+                  ml: 1,
+                  color: "white",
+                  "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.15)" }
+                }}
               >
                 {setting.darkMode ? <Brightness7Icon /> : <Brightness4Icon />}
               </IconButton>
             </Box>
+            <IconButton
+              aria-label="open drawer"
+              edge="start"
+              onClick={handleDrawerToggle}
+              sx={{
+                ml: 2,
+                display: { sm: "none" },
+                color: "white",
+                "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.15)" }
+              }}
+            >
+              <MenuIcon />
+            </IconButton>
           </Toolbar>
         </AppBar>
         <ExportImportDialog
@@ -175,7 +212,6 @@ export function NavBar(props: NavProps) {
           </Drawer>
         </nav>
       </Box>
-      <Toolbar />
     </>
   );
 }

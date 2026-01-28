@@ -6,6 +6,7 @@ import {
     ListItemText,
     Collapse,
     Box,
+    alpha,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
@@ -47,16 +48,48 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
             <ListItemButton
                 selected={selectedId === node.id}
                 onClick={handleClick}
-                sx={{ pl: level * 2 + 2, py: 0.5, borderRadius: 2, mb: 0.5 }}
+                sx={{
+                    pl: level * 2 + 2,
+                    py: 1,
+                    borderRadius: 2,
+                    mb: 0.5,
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                        backgroundColor: (theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.08 : 0.15),
+                        transform: "translateX(4px)",
+                        "& .MuiListItemIcon-root": {
+                            color: "primary.main",
+                        }
+                    },
+                    "&.Mui-selected": {
+                        backgroundColor: (theme) => theme.palette.mode === 'light'
+                            ? "primary.main"
+                            : "primary.dark",
+                        color: "white",
+                        fontWeight: 600,
+                        boxShadow: "0 2px 8px rgba(25, 118, 210, 0.3)",
+                        "&:hover": {
+                            backgroundColor: (theme) => theme.palette.mode === 'light'
+                                ? "primary.dark"
+                                : "primary.main",
+                        },
+                        "& .MuiListItemIcon-root": {
+                            color: "white",
+                        },
+                        "& .MuiListItemText-primary": {
+                            color: "white",
+                        }
+                    }
+                }}
             >
-                <ListItemIcon sx={{ minWidth: 32 }}>
-                    {open ? <FolderOpenIcon fontSize="small" color="primary" /> : <FolderIcon fontSize="small" color="primary" />}
+                <ListItemIcon sx={{ minWidth: 32, color: "primary.main" }}>
+                    {open ? <FolderOpenIcon fontSize="small" /> : <FolderIcon fontSize="small" />}
                 </ListItemIcon>
                 <ListItemText
                     primary={node.title || "Untitled Folder"}
                     primaryTypographyProps={{
                         variant: "body2",
-                        fontWeight: selectedId === node.id ? 600 : 400,
+                        fontWeight: selectedId === node.id ? 600 : 500,
                         noWrap: true
                     }}
                 />
@@ -171,16 +204,47 @@ export const FolderTree: React.FC<FolderTreeProps> = () => {
             <ListItemButton
                 selected={selectedFolderId === "all"}
                 onClick={() => setSelectedFolderId("all")}
-                sx={{ py: 0.5, borderRadius: 2, mb: 1 }}
+                sx={{
+                    py: 1,
+                    borderRadius: 2,
+                    mb: 1,
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                        backgroundColor: (theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'light' ? 0.08 : 0.15),
+                        transform: "translateX(4px)",
+                        "& .MuiListItemIcon-root": {
+                            color: "primary.main",
+                        }
+                    },
+                    "&.Mui-selected": {
+                        backgroundColor: (theme) => theme.palette.mode === 'light'
+                            ? "primary.main"
+                            : "primary.dark",
+                        color: "white",
+                        fontWeight: 600,
+                        boxShadow: "0 2px 8px rgba(25, 118, 210, 0.3)",
+                        "&:hover": {
+                            backgroundColor: (theme) => theme.palette.mode === 'light'
+                                ? "primary.dark"
+                                : "primary.main",
+                        },
+                        "& .MuiListItemIcon-root": {
+                            color: "white",
+                        },
+                        "& .MuiListItemText-primary": {
+                            color: "white",
+                        }
+                    }
+                }}
             >
-                <ListItemIcon sx={{ minWidth: 32 }}>
-                    <AllInclusiveIcon fontSize="small" color="primary" />
+                <ListItemIcon sx={{ minWidth: 32, color: "primary.main" }}>
+                    <AllInclusiveIcon fontSize="small" />
                 </ListItemIcon>
                 <ListItemText
                     primary="All Bookmarks"
                     primaryTypographyProps={{
                         variant: "body2",
-                        fontWeight: selectedFolderId === "all" ? 600 : 400
+                        fontWeight: selectedFolderId === "all" ? 600 : 500
                     }}
                 />
             </ListItemButton>

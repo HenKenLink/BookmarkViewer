@@ -1,14 +1,10 @@
 import { messageId } from "../global/message";
-import {
-  testAddBookmarks,
-  testStorageConfig,
-  // testGetScript,
-} from "../global/test";
 import { FetchTask, FetchConfig } from "../global/types";
 
 import { waitForTabLoad, filterUnloadPageUrl } from "../global/globalUtils";
 import { useStore } from "../options/store";
-import { SelectorType } from "../global/types";
+import { SelectorType, Setting } from "../global/types";
+import { SETTINGS_KEY } from "../options/consts";
 
 type Thumb = {
   pageUrl: string;
@@ -130,24 +126,26 @@ async function fetchSimpleThumb(
   return thumbList;
 }
 
-function dynamicExecutor(script: string, ...args: any[]): Function {
+function dynamicExecutor(script: string, pageUrlList: string[]): Function {
   try {
     const func = new Function(
       "pageUrlList",
-      "messageId",
       `return (async () => {
       ${script}
     })();`
     );
-    return func(...args);
+    // @ts-ignore
+    return func(pageUrlList);
   } catch (e) {
     console.error("Error executing dynamic script:", e);
     throw e;
   }
 }
 
-// Flag to control fetch cancellation
+// Flag and counters to control fetch and track progress
 let isFetchStopped = false;
+let currentProgress = 0;
+let totalItems = 0;
 
 browser.runtime.onMessage.addListener(async (message, sender) => {
   if (message.type === messageId.stopFetch) {
@@ -160,19 +158,28 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     isFetchStopped = false;
     const fetchTaskList: FetchTask[] = message.fetchTaskList;
 
+    // Get current settings for delay
+    const settingsRaw = await browser.storage.local.get(SETTINGS_KEY);
+    const settings: Setting = settingsRaw[SETTINGS_KEY] as Setting;
+    const { enableDelay, fetchDelayCount, fetchDelayTimeMin, fetchDelayTimeMax } = settings || {};
+
+    const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+    let itemsFetchedInSession = 0;
+
     // Calculate total items
-    let totalItems = 0;
+    totalItems = 0;
     for (const task of fetchTaskList) {
       totalItems += task.items.length;
     }
+
+    // Reset progress
+    currentProgress = 0;
 
     // Send fetch started message
     browser.runtime.sendMessage({
       type: messageId.fetchStarted,
       total: totalItems,
     });
-
-    let currentProgress = 0;
 
     for (const task of fetchTaskList) {
       if (isFetchStopped) break;
@@ -197,19 +204,48 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         });
         const tabId = tab.id!;
         await waitForTabLoad(tabId);
-        const res = await browser.scripting.executeScript({
-          target: { tabId },
-          func: dynamicExecutor,
-          args: [script, pageUrlList],
-          world: "MAIN",
-        });
-        if (res && res[0].result) {
-          // @ts-ignore
-          thumbList = res[0].result;
-        } else {
-          console.error(`[Background] Failed to get script execution result for ${hostname}`);
+        console.log(`[Background] Using unified serial injection with MAIN world for ${hostname}`);
+        for (const pageUrl of pageUrlList) {
+          if (isFetchStopped) break;
+          try {
+            console.log(`[Background] Injecting script for ${pageUrl}`);
+            const res = await browser.scripting.executeScript({
+              target: { tabId },
+              func: dynamicExecutor,
+              args: [script, [pageUrl]],
+              world: "MAIN",
+            });
+
+            const executionResult = res?.[0]?.result;
+            const results = (executionResult as any)?.results || [];
+
+            console.log(`[Background] Got results for ${pageUrl}:`, results);
+
+            for (const thumb of results) {
+              await saveThumb(thumb);
+              currentProgress++;
+              itemsFetchedInSession++;
+
+              browser.runtime.sendMessage({
+                type: messageId.singleThumbFinished,
+                pageUrl: thumb.pageUrl,
+                progress: currentProgress,
+                total: totalItems,
+              });
+
+              // Check for delay
+              if (enableDelay && fetchDelayCount > 0 && itemsFetchedInSession % fetchDelayCount === 0 && currentProgress < totalItems) {
+                const randomDelay = Math.floor(Math.random() * (fetchDelayTimeMax - fetchDelayTimeMin + 1)) + fetchDelayTimeMin;
+                console.log(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
+                await delay(randomDelay);
+              }
+            }
+          } catch (err) {
+            console.error(`[Background] Script execution failed for ${pageUrl}`, err);
+          }
         }
         await browser.tabs.remove(tabId);
+        continue;
       } else if (mode === "simple" && selector) {
         thumbList = await fetchSimpleThumb(
           pageUrlList,
@@ -219,20 +255,26 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         );
       }
 
-      // Save and notify for each thumb individually
       for (const thumb of thumbList) {
         if (isFetchStopped) break;
 
         await saveThumb(thumb);
         currentProgress++;
+        itemsFetchedInSession++;
 
-        // Send single thumb finished message
         browser.runtime.sendMessage({
           type: messageId.singleThumbFinished,
           pageUrl: thumb.pageUrl,
           progress: currentProgress,
           total: totalItems,
         });
+
+        // Check for delay
+        if (enableDelay && fetchDelayCount > 0 && itemsFetchedInSession % fetchDelayCount === 0 && currentProgress < totalItems) {
+          const randomDelay = Math.floor(Math.random() * (fetchDelayTimeMax - fetchDelayTimeMin + 1)) + fetchDelayTimeMin;
+          console.log(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
+          await delay(randomDelay);
+        }
       }
     }
 
@@ -244,15 +286,18 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
   }
 });
 
-export default defineBackground(async () => {
-  console.log(`[Background] Initializing. DEV: ${__DEV__}, CHROME: ${__CHROME__}`);
-  await testStorageConfig();
+export default defineBackground(() => {
+  (async () => {
+    console.log(`[Background] Initializing. DEV: ${__DEV__}, CHROME: ${__CHROME__}`);
 
-  if (__DEV__) {
-    console.log("[Background] Running in DEV mode, adding test data...");
-    openUI();
-    await testAddBookmarks();
-  }
+    if (__DEV__) {
+      console.log("[Background] Running in DEV mode, adding test data...");
+      const { testStorageConfig, testAddBookmarks } = await import("../global/test");
+      await testStorageConfig();
+      await testAddBookmarks();
+      openUI();
+    }
+  })();
 
   if (__CHROME__) {
     browser.action.onClicked.addListener(openUI);

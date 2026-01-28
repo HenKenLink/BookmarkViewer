@@ -1,6 +1,6 @@
 import { useStore } from "../store/index";
 import { messageId } from "../../global/message";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   BookmarkTreeNode,
   FetchTask,
@@ -13,8 +13,10 @@ import { Box, Typography, Button, Toolbar, TextField, InputAdornment, IconButton
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import MenuIcon from "@mui/icons-material/Menu";
+import SettingsIcon from "@mui/icons-material/Settings";
 import { FolderTree } from "../Components/FolderTree";
 import { FolderCard } from "../Components/FolderCard";
+import { FetchSettingsDialog } from "../Components/FetchSettingsDialog";
 
 import { NavBar } from "../Components/NavBar";
 import LaunchIcon from "@mui/icons-material/Launch";
@@ -74,6 +76,7 @@ export function ViewerPage() {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
   const sidebarOpen = useStore((state) => state.sidebarOpen);
   const setSidebarOpen = useStore((state) => state.setSidebarOpen);
@@ -239,14 +242,46 @@ export function ViewerPage() {
             position: "sticky",
             top: 0,
             overflowY: "auto",
-            p: 2,
-            bgcolor: "background.paper"
+            bgcolor: (theme) => theme.palette.mode === 'light'
+              ? "grey.50"
+              : "background.default",
           }}
         >
-          <Typography variant="overline" sx={{ px: 1, fontWeight: 700, color: "text.secondary" }}>
-            Folders
-          </Typography>
-          <FolderTree />
+          <Box
+            sx={{
+              background: (theme) => theme.palette.mode === 'light'
+                ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`
+                : `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.background.paper} 100%)`,
+              p: 2.5,
+              m: 2,
+              borderRadius: "16px",
+              boxShadow: "0 4px 15px rgba(0, 0, 0, 0.15)",
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{
+                fontWeight: 700,
+                color: "white",
+                letterSpacing: "0.5px",
+                textShadow: "0 1px 3px rgba(0,0,0,0.2)",
+              }}
+            >
+              📁 Folders
+            </Typography>
+            <Typography
+              variant="caption"
+              sx={{
+                color: "rgba(255, 255, 255, 0.8)",
+                fontWeight: 500,
+              }}
+            >
+              Browse your bookmarks
+            </Typography>
+          </Box>
+          <Box sx={{ px: 2 }}>
+            <FolderTree />
+          </Box>
         </Box>
       )}
 
@@ -258,17 +293,54 @@ export function ViewerPage() {
         ModalProps={{ keepMounted: true }}
         sx={{
           display: { xs: "block", md: "none" },
-          "& .MuiDrawer-paper": { boxSizing: "border-box", width: 280, p: 2 },
+          "& .MuiDrawer-paper": {
+            boxSizing: "border-box",
+            width: 280,
+            bgcolor: (theme) => theme.palette.mode === 'light'
+              ? "grey.50"
+              : "background.default",
+          },
         }}
       >
-        <Typography variant="h6" sx={{ px: 1, mb: 2, fontWeight: 700 }}>
-          Folders
-        </Typography>
-        <FolderTree />
+        <Box
+          sx={{
+            background: (theme) => theme.palette.mode === 'light'
+              ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`
+              : `linear-gradient(135deg, ${theme.palette.primary.dark} 0%, ${theme.palette.background.paper} 100%)`,
+            p: 2.5,
+            m: 2,
+            borderRadius: "16px",
+            boxShadow: "0 4px 15px rgba(0, 0, 0, 0.15)",
+          }}
+        >
+          <Typography
+            variant="h6"
+            sx={{
+              fontWeight: 700,
+              color: "white",
+              letterSpacing: "0.5px",
+              textShadow: "0 1px 3px rgba(0,0,0,0.2)",
+            }}
+          >
+            📁 Folders
+          </Typography>
+          <Typography
+            variant="caption"
+            sx={{
+              color: "rgba(255, 255, 255, 0.8)",
+              fontWeight: 500,
+            }}
+          >
+            Browse your bookmarks
+          </Typography>
+        </Box>
+        <Box sx={{ px: 2 }}>
+          <FolderTree />
+        </Box>
       </Drawer>
 
       {/* Main Content */}
-      <Box sx={{ flexGrow: 1, p: 3, maxWidth: "100%", overflowX: "hidden" }}>
+      <Box sx={{ flexGrow: 1, p: 3, pt: 1, maxWidth: "100%", overflowX: "hidden" }}>
         <BoxItem
           sx={{
             gap: 1,
@@ -292,29 +364,44 @@ export function ViewerPage() {
               Captured
             </Typography>
           </Stack>
-          {isFetching ? (
-            <FetchProgress
-              isFetching={isFetching}
-              progress={fetchProgress}
-              total={fetchTotal}
-              onStop={() => {
-                stopFetching();
-              }}
-            />
-          ) : (
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<LaunchIcon />}
-              onClick={async () => {
-                await startGetThumb(fetchTaskList);
-              }}
-              sx={{ borderRadius: 2, px: 3 }}
-            >
-              Fetch Thumbnails
-            </Button>
-          )}
+          <Stack direction="row" alignItems="center" spacing={1}>
+            {!isFetching && (
+              <IconButton
+                color="primary"
+                onClick={() => setSettingsDialogOpen(true)}
+              >
+                <SettingsIcon />
+              </IconButton>
+            )}
+            {isFetching ? (
+              <FetchProgress
+                isFetching={isFetching}
+                progress={fetchProgress}
+                total={fetchTotal}
+                onStop={() => {
+                  stopFetching();
+                }}
+              />
+            ) : (
+              <Button
+                variant="contained"
+                color="primary"
+                startIcon={<LaunchIcon />}
+                onClick={async () => {
+                  await startGetThumb(fetchTaskList);
+                }}
+                sx={{ borderRadius: 2, px: 3 }}
+              >
+                Fetch Thumbnails
+              </Button>
+            )}
+          </Stack>
         </BoxItem>
+
+        <FetchSettingsDialog
+          open={settingsDialogOpen}
+          onClose={() => setSettingsDialogOpen(false)}
+        />
 
         <Box sx={{ mb: 3, px: 1 }}>
           <TextField
