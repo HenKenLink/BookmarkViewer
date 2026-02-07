@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
     List,
     ListItemButton,
@@ -13,8 +13,12 @@ import FolderOpenIcon from "@mui/icons-material/FolderOpen";
 import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import AllInclusiveIcon from "@mui/icons-material/AllInclusive";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import DownloadIcon from "@mui/icons-material/Download";
+import RefreshIcon from "@mui/icons-material/Refresh";
 import { BookmarkTreeNode } from "../../global/types";
 import { useStore } from "../store";
+import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 
 interface FolderTreeProps {
     onSelect?: (id: string) => void;
@@ -33,6 +37,12 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
     const open = expandedIds.has(node.id);
     const hasChildren = node.children && node.children.some((child: BookmarkTreeNode) => !child.url);
 
+    const setSelectedFolderId = useStore((state) => state.setSelectedFolderId);
+    const getAllBookmarksInFolderAction = useStore((state) => state.getAllBookmarksInFolderAction);
+    const forceFetchThumbnails = useStore((state) => state.forceFetchThumbnails);
+
+    const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
+
     const handleClick = (e: React.MouseEvent) => {
         e.stopPropagation();
         onSelect(node.id);
@@ -43,11 +53,63 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
         onToggle(node.id, !open);
     };
 
+    const handleContextMenu = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenu(
+            contextMenu === null
+                ? { mouseX: e.clientX, mouseY: e.clientY }
+                : null
+        );
+    };
+
+    const handleCloseContextMenu = () => {
+        setContextMenu(null);
+    };
+
+    const handleShowBookmarks = () => {
+        setSelectedFolderId(node.id);
+    };
+
+    const handleFetchThumbs = async () => {
+        const bookmarks = getAllBookmarksInFolderAction(node.id);
+        if (bookmarks.length > 0) {
+            await forceFetchThumbnails(bookmarks.map(bk => bk.id));
+        }
+    };
+
+    const handleForceFetchThumbs = async () => {
+        const bookmarks = getAllBookmarksInFolderAction(node.id);
+        if (bookmarks.length > 0) {
+            await forceFetchThumbnails(bookmarks.map(bk => bk.id));
+        }
+    };
+
+    const contextMenuItems: ContextMenuItem[] = [
+        {
+            label: "Show bookmarks",
+            icon: <VisibilityIcon fontSize="small" />,
+            onClick: handleShowBookmarks,
+        },
+        {
+            label: "Fetch thumbs",
+            icon: <DownloadIcon fontSize="small" />,
+            onClick: handleFetchThumbs,
+            divider: true,
+        },
+        {
+            label: "Force fetch thumbs",
+            icon: <RefreshIcon fontSize="small" />,
+            onClick: handleForceFetchThumbs,
+        },
+    ];
+
     return (
         <>
             <ListItemButton
                 selected={selectedId === node.id}
                 onClick={handleClick}
+                onContextMenu={handleContextMenu}
                 sx={{
                     pl: level * 2 + 2,
                     py: 1,
@@ -99,6 +161,14 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
                     </Box>
                 )}
             </ListItemButton>
+
+            <ContextMenu
+                open={contextMenu !== null}
+                anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : null}
+                onClose={handleCloseContextMenu}
+                items={contextMenuItems}
+            />
+
             {hasChildren && (
                 <Collapse in={open} timeout="auto" unmountOnExit>
                     <List component="div" disablePadding>

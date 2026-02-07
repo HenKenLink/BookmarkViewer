@@ -1,7 +1,7 @@
 import { messageId } from "../global/message";
 import { FetchTask, FetchConfig } from "../global/types";
 
-import { waitForTabLoad, filterUnloadPageUrl } from "../global/globalUtils";
+import { waitForTabLoad } from "../global/globalUtils";
 import { useStore } from "../options/store";
 import { SelectorType, Setting } from "../global/types";
 import { SETTINGS_KEY } from "../options/consts";
@@ -42,6 +42,78 @@ async function saveThumb(thumb: Thumb): Promise<void> {
   }
 }
 
+
+// Executor for open_simple mode (runs in page)
+async function simpleScriptExecutor(selector: string, type: string, attribute: string | null) {
+  const getThumb = () => {
+    const html = document.documentElement.outerHTML;
+    let thumbUrl: string | null | undefined = null;
+
+    if (type === "regex") {
+      const regex = new RegExp(selector);
+      const match = html.match(regex);
+      if (match && match[1]) {
+        thumbUrl = match[1];
+      }
+    } else {
+      // Use document for CSS and XPath
+      if (type === "css") {
+        const element = document.querySelector(selector);
+        if (element) {
+          thumbUrl = attribute
+            ? element.getAttribute(attribute)
+            : element.getAttribute("src") ||
+            element.getAttribute("content") ||
+            element.textContent;
+        }
+      } else if (type === "xpath") {
+        const result = document.evaluate(
+          selector,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        const node = result.singleNodeValue;
+        if (node) {
+          if (node.nodeType === Node.ATTRIBUTE_NODE) {
+            thumbUrl = node.nodeValue;
+          } else if (node.nodeType === Node.ELEMENT_NODE) {
+            // Try to guess reasonable attributes if just element is selected
+            const el = node as Element;
+            thumbUrl =
+              el.getAttribute("src") ||
+              el.getAttribute("content") ||
+              el.getAttribute("href") ||
+              el.textContent;
+          } else {
+            thumbUrl = node.textContent;
+          }
+        }
+      }
+    }
+
+    if (thumbUrl) {
+      try {
+        return new URL(thumbUrl, document.baseURI).href;
+      } catch (e) {
+        return thumbUrl;
+      }
+    }
+    return null;
+  };
+
+  // Poll for up to 10 seconds
+  const startTime = Date.now();
+  while (Date.now() - startTime < 10000) {
+    const thumbUrl = getThumb();
+    if (thumbUrl) return thumbUrl;
+    // Wait 500ms
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+
+  return null;
+}
 
 async function fetchSimpleThumb(
   pageUrlList: string[],
@@ -181,6 +253,20 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       total: totalItems,
     });
 
+    // Helper to ensure we have a valid tab
+    async function getOrCreateTab(tabId: number | null, initialUrl: string): Promise<number> {
+      if (tabId !== null) {
+        try {
+          const tab = await browser.tabs.get(tabId);
+          if (tab.id) return tab.id;
+        } catch (e) {
+          console.log(`[Background] Tab ${tabId} lost, will create new one`);
+        }
+      }
+      const tab = await browser.tabs.create({ url: initialUrl, active: false });
+      return tab.id!;
+    }
+
     for (const task of fetchTaskList) {
       if (isFetchStopped) break;
 
@@ -196,55 +282,144 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       let thumbList: Thumb[] = [];
 
       if (mode === "inject" && script) {
-        const hostname = config.hostname;
-        const tabUrl = `https://${hostname}`;
-        const tab = await browser.tabs.create({
-          url: tabUrl,
-          active: false,
-        });
-        const tabId = tab.id!;
-        await waitForTabLoad(tabId);
-        console.log(`[Background] Using unified serial injection with MAIN world for ${hostname}`);
-        for (const pageUrl of pageUrlList) {
-          if (isFetchStopped) break;
+        let hostname = config.hostname;
+        // Normalize hostname: remove protocol if user incorrectly entered it
+        if (hostname.includes("://")) {
           try {
-            console.log(`[Background] Injecting script for ${pageUrl}`);
-            const res = await browser.scripting.executeScript({
-              target: { tabId },
-              func: dynamicExecutor,
-              args: [script, [pageUrl]],
-              world: "MAIN",
-            });
+            hostname = new URL(hostname).hostname;
+          } catch (e) { }
+        }
+        const tabUrl = `https://${hostname}`;
+        let tabId: number | null = null;
 
-            const executionResult = res?.[0]?.result;
-            const results = (executionResult as any)?.results || [];
+        console.log(`[Background] Using unified serial injection with MAIN world for ${hostname}`);
 
-            console.log(`[Background] Got results for ${pageUrl}:`, results);
+        try {
+          // Initialize tab for this batch
+          tabId = await getOrCreateTab(null, tabUrl);
+          await waitForTabLoad(tabId);
 
-            for (const thumb of results) {
-              await saveThumb(thumb);
-              currentProgress++;
-              itemsFetchedInSession++;
+          for (const pageUrl of pageUrlList) {
+            if (isFetchStopped) break;
+            try {
+              // Ensure tab is still valid before processing each item
+              tabId = await getOrCreateTab(tabId, tabUrl);
+              // If we had to recreate the tab, we might need to wait for load, 
+              // but getOrCreateTab with tabUrl starts loading.
+              // For inject mode, we generally want to stay on the main domain page 
+              // or just have a tab open to the domain.
+              // However, the original logic created the tab once. 
+              // If recreated, we should wait for load.
+              // We can check if tab status is complete via waitForTabLoad.
+              await waitForTabLoad(tabId);
 
-              browser.runtime.sendMessage({
-                type: messageId.singleThumbFinished,
-                pageUrl: thumb.pageUrl,
-                progress: currentProgress,
-                total: totalItems,
+              console.log(`[Background] Injecting script for ${pageUrl}`);
+              const res = await browser.scripting.executeScript({
+                target: { tabId },
+                func: dynamicExecutor,
+                args: [script, [pageUrl]],
+                world: "MAIN",
               });
 
-              // Check for delay
-              if (enableDelay && fetchDelayCount > 0 && itemsFetchedInSession % fetchDelayCount === 0 && currentProgress < totalItems) {
-                const randomDelay = Math.floor(Math.random() * (fetchDelayTimeMax - fetchDelayTimeMin + 1)) + fetchDelayTimeMin;
-                console.log(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
-                await delay(randomDelay);
+              const executionResult = res?.[0]?.result;
+              const results = (executionResult as any)?.results || [];
+
+              console.log(`[Background] Got results for ${pageUrl}:`, results);
+
+              for (const thumb of results) {
+                await saveThumb(thumb);
+                currentProgress++;
+                itemsFetchedInSession++;
+
+                browser.runtime.sendMessage({
+                  type: messageId.singleThumbFinished,
+                  pageUrl: thumb.pageUrl,
+                  progress: currentProgress,
+                  total: totalItems,
+                });
+
+                // Check for delay
+                if (enableDelay && fetchDelayCount > 0 && itemsFetchedInSession % fetchDelayCount === 0 && currentProgress < totalItems) {
+                  const randomDelay = Math.floor(Math.random() * (fetchDelayTimeMax - fetchDelayTimeMin + 1)) + fetchDelayTimeMin;
+                  console.log(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
+                  await delay(randomDelay);
+                }
               }
+            } catch (err) {
+              console.error(`[Background] Script execution failed for ${pageUrl}`, err);
             }
-          } catch (err) {
-            console.error(`[Background] Script execution failed for ${pageUrl}`, err);
+          }
+        } finally {
+          if (tabId) {
+            try { await browser.tabs.remove(tabId); } catch (e) { }
           }
         }
-        await browser.tabs.remove(tabId);
+        continue;
+      } else if (mode === "open_simple" && selector) {
+        let tabId: number | null = null;
+        const type = config.selectorType || "regex";
+        const attribute = config.attribute;
+
+        try {
+          // Iterate over all pages
+          for (const pageUrl of pageUrlList) {
+            if (isFetchStopped) break;
+
+            try {
+              // Get or create tab (using about:blank as default if creating new)
+              tabId = await getOrCreateTab(tabId, "about:blank");
+
+              await browser.tabs.update(tabId, { url: pageUrl });
+              await waitForTabLoad(tabId);
+
+              const res = await browser.scripting.executeScript({
+                target: { tabId },
+                func: simpleScriptExecutor,
+                args: [selector, type, attribute ?? null],
+                world: "MAIN",
+              });
+
+              const thumbUrl = res?.[0]?.result;
+              if (thumbUrl) {
+                const thumb = { pageUrl, thumbUrl };
+                await saveThumb(thumb);
+                currentProgress++;
+                itemsFetchedInSession++;
+
+                browser.runtime.sendMessage({
+                  type: messageId.singleThumbFinished,
+                  pageUrl: thumb.pageUrl,
+                  progress: currentProgress,
+                  total: totalItems,
+                });
+
+                // Check for delay
+                if (enableDelay && fetchDelayCount > 0 && itemsFetchedInSession % fetchDelayCount === 0 && currentProgress < totalItems) {
+                  const randomDelay = Math.floor(Math.random() * (fetchDelayTimeMax - fetchDelayTimeMin + 1)) + fetchDelayTimeMin;
+                  console.log(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
+                  await delay(randomDelay);
+                }
+              } else {
+                console.warn(`[Background] No thumb found for ${pageUrl} in open_simple mode`);
+              }
+
+            } catch (err) {
+              console.error(`[Background] Failed to process ${pageUrl} in open_simple mode`, err);
+              // If error allows, we might want to reset tabId if we suspect tab is dead,
+              // but the next iteration check will handle 'tab not found' errors.
+              // If 'waitForTabLoad' throws 'Tab ... was closed', we proceed to next item,
+              // and next loop checks find tabId invalid and recreate it.
+            }
+          }
+        } finally {
+          if (tabId !== null) {
+            try {
+              await browser.tabs.remove(tabId);
+            } catch (e) {
+              // Ignore removal errors (tab might be already gone)
+            }
+          }
+        }
         continue;
       } else if (mode === "simple" && selector) {
         thumbList = await fetchSimpleThumb(
@@ -280,8 +455,20 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 
     if (isFetchStopped) {
       browser.runtime.sendMessage({ type: messageId.fetchStopped });
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "/icon/128.png",
+        title: "Bookmark Viewer",
+        message: "获取任务已停止",
+      });
     } else {
       browser.runtime.sendMessage({ type: messageId.getThumbfinished });
+      browser.notifications.create({
+        type: "basic",
+        iconUrl: "/icon/128.png",
+        title: "Bookmark Viewer",
+        message: `获取完成！共获取了 ${totalItems} 个书签封面。`,
+      });
     }
   }
 });

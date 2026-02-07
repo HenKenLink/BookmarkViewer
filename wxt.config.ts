@@ -12,6 +12,12 @@ export default defineConfig({
   manifest: {
     name: "Bookmark Viewer",
     version: "0.0.1",
+    browser_specific_settings: {
+      "gecko": {
+        "id": "{dacde3ba-72d1-48c5-afd3-83097c36f518}",
+        "strict_min_version": "109.0",
+      }
+    },
     action: {
       default_icon: "/icon/48.png",
     },
@@ -22,11 +28,11 @@ export default defineConfig({
       "scripting",
       "activeTab",
       "downloads",
+      "notifications",
     ],
     host_permissions: ["<all_urls>"],
   },
   webExt: {
-    browserConsole: true,
     binaries: {
       chrome: "/usr/bin/brave-browser",
     },

@@ -217,7 +217,7 @@ export function ConfigEditPage() {
     const [configHostname, setConfigHostname] = useState<string>("");
     const [configRegexPettern, setConfigRegexPettern] = useState<string>("");
     const [configScript, setConfigScript] = useState<string>("");
-    const [configMode, setConfigMode] = useState<"inject" | "simple">("inject");
+    const [configMode, setConfigMode] = useState<"inject" | "simple" | "open_simple">("inject");
     const [configSelector, setConfigSelector] = useState<string>("");
     const [configSelectorType, setConfigSelectorType] =
         useState<SelectorType>("regex");
@@ -318,6 +318,7 @@ export function ConfigEditPage() {
             !configName ||
             !configHostname ||
             (configMode === "inject" && !configScript) ||
+            (configMode === "open_simple" && !configSelector) ||
             (configMode === "simple" && !configSelector)
         ) {
             toast.error(
@@ -332,10 +333,10 @@ export function ConfigEditPage() {
             regexPattern: configRegexPettern,
             fetchScript: configMode === "inject" ? configScript : undefined,
             mode: configMode,
-            selector: configMode === "simple" ? configSelector : undefined,
-            selectorType: configMode === "simple" ? configSelectorType : undefined,
+            selector: (configMode === "simple" || configMode === "open_simple") ? configSelector : undefined,
+            selectorType: (configMode === "simple" || configMode === "open_simple") ? configSelectorType : undefined,
             attribute:
-                configMode === "simple" && configSelectorType === "css"
+                (configMode === "simple" || configMode === "open_simple") && configSelectorType === "css"
                     ? configAttribute
                     : undefined,
         };
@@ -561,6 +562,13 @@ export function ConfigEditPage() {
                                             Inject Script
                                         </ModeButton>
                                         <ModeButton
+                                            active={configMode === "open_simple"}
+                                            onClick={() => setConfigMode("open_simple")}
+                                            startIcon={<LanguageIcon />}
+                                        >
+                                            Open Page Simple
+                                        </ModeButton>
+                                        <ModeButton
                                             active={configMode === "simple"}
                                             onClick={() => setConfigMode("simple")}
                                             startIcon={<TextFieldsIcon />}
@@ -569,8 +577,8 @@ export function ConfigEditPage() {
                                         </ModeButton>
                                     </ModeSelector>
 
-                                    {/* Simple Mode */}
-                                    <Collapse in={configMode === "simple"} timeout={setting.enableAnimations ? undefined : 0}>
+                                    {/* Simple & Open Simple Mode */}
+                                    <Collapse in={configMode === "simple" || configMode === "open_simple"} timeout={setting.enableAnimations ? undefined : 0}>
                                         <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
                                             {/* Selector Type Buttons */}
                                             <Box>

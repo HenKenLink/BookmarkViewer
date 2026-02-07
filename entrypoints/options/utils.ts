@@ -10,7 +10,15 @@ export function filterBookmarkByMatchPattern(
   bookmarkList: BookmarkTreeNode[],
   matchPattern: MatchPattern
 ): BookmarkTreeNode[] {
-  const hostname = matchPattern.hostname;
+  let hostname = matchPattern.hostname;
+  // If hostname includes protocol, extract the real hostname
+  if (hostname.includes("://")) {
+    try {
+      hostname = new URL(hostname).hostname;
+    } catch (e) {
+      // If URL parsing fails, use the original string
+    }
+  }
   const regexPattern = matchPattern.regexPattern;
 
   const hostMatch = (bkList: BookmarkTreeNode[]) => {

@@ -5,33 +5,17 @@ import { CONFIGS_KEY } from "../options/consts";
 // 添加parentId会报错
 const testBookmarkList: CreateDetails[] = [
   {
-    title: "Kenvin Nguyen & Tien Quan - BoyFriendTV.com",
-    url: "https://www.boyfriendtv.com/videos/1255950/kenvin-nguyen-tien-quan-c3-teddy-teddy6859-c3-zero-s-men2024/",
+    title: "Teddy Bryce and Trenton Ducatti Fuckin Teddy Naked With",
+    url: "https://thegay.com/videos/1161629/teddy-bryce-and-trenton-ducatti-fuckin-teddy-naked-with/?fr=1161629&rp=1",
   },
   {
-    title: "Str8 guy shoots a big load - BoyFriendTV.com",
-    url: "https://www.boyfriendtv.com/videos/1574084/str8-guy-shoots-a-big-load-riding-a-dildo/",
+    title: "Doms and Breeds Nerdy Sub at Dungeon East with Jay Austin and Teddy Bryce",
+    url: "https://thegay.com/videos/1603735/doms-and-breeds-nerdy-sub-at-dungeon-east-with-jay-austin-and-teddy-bryce/?fr=1603735&rp=1",
   },
   {
-    title: "Han Fucked By Two Muscle Big Dick Daddies",
-    url: "https://www.boyfriendtv.com/videos/1471832/han-fucked-by-two-muscle-big-dick-daddies/?tag=asian%20muscle%20men",
+    title: "Austin Finally Breeds Kip",
+    url: "https://thegay.com/videos/1135577/austin-finally-breeds-kip/",
   },
-  {
-    title: "Big black cock takes ownership of that ass",
-    url: "https://www.boyfriendtv.com/videos/1574977/big-black-cock-takes-ownership-of-that-ass/?tag=big%20cock%20asian%20body%20builders%20gangbang%20interracial%20rimming%20blowjob%20bareback%20gay%20sex%20creampie%20double%20penetration%20muscle%20black%20chinese%20nipple%20sucking",
-  }
-  // {
-  //   title: "Nickoles A & YarddieStyle iGayVideos.TV",
-  //   url: "https://www.igayvideos.tv/nickoles-a-yarddiestyle_2808271.html",
-  // },
-  // {
-  //   title: "Loc Rios and David Christian (Dombeeef) fuck",
-  //   url: "https://justthegays.tv/video/loc-rios-and-david-christian-dombeeef-fuck-91",
-  // },
-  // {
-  //   title: "TheRealKingCock fucks Jaxx Cody (jaxx_cody)",
-  //   url: "https://gayforfans.com/video/therealkingcock-fucks-jaxx-cody-jaxx_cody-1763044888/",
-  // },
 ];
 
 // https://www.boyfriendtv.com/es/videos/1301842/bottom-takes-a-monstercock-in-her-big-ass/
@@ -55,91 +39,63 @@ const fetchScript = `
 async function fetchHtml(url) {
   try {
     const response = await fetch(url, {
-      method: "GET",
       headers: {
-        "User-Agent":
-          "Mozilla/5.0 (X11; Linux x86_64; rv:139.0) Gecko/20100101 Firefox/139.0",
-        Accept:
-          "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.5",
-        "Accept-Encoding": "gzip",
-        Referer: "https://www.boyfriendtv.com/",
-        Connection: "keep-alive",
-        "Upgrade-Insecure-Requests": "1",
-        "Sec-Fetch-Dest": "document",
-        "Sec-Fetch-Mode": "navigate",
-        "Sec-Fetch-Site": "same-origin",
-        "Sec-Fetch-User": "?1",
-        Priority: "u=0, i",
-        Pragma: "no-cache",
-        "Cache-Control": "no-cache",
-        TE: "trailers",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/139.0",
+        "Referer": "https://www.boyfriendtv.com/",
       },
     });
-
-    const data = await response.text();
-
-    console.log("Html response: ", data);
-
-    return data; // 一定要返回字符串
+    if (!response.ok) throw new Error(\`HTTP error! status: \${response.status}\`);
+    return await response.text();
   } catch (error) {
-    console.error("Error:", error);
-    throw error; // 抛出异常让调用方知道请求失败
+    console.error("FetchHtml Error:", error);
+    throw error;
   }
 }
 
 function extractThumbUrl(html) {
-  console.log("Start to parse html.");
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, "text/html");
-
+  console.log("Parsing html...");
+  const doc = new DOMParser().parseFromString(html, "text/html");
   const scriptTag = doc.querySelector('script[type="application/ld+json"]');
-  if (!scriptTag) {
-    console.error("Fail to get script tag.");
+  
+  if (!scriptTag?.textContent) {
+    console.error("LD+JSON script tag not found.");
     return null;
   }
 
-  let jsonData;
-  if (scriptTag.textContent) {
-    try {
-      jsonData = JSON.parse(scriptTag.textContent);
-    } catch (e) {
-      console.error("Fail to parse json data.");
-      return null;
-    }
-  } else {
-    console.error("Fail to get textContent from script tag.");
+  try {
+    const jsonData = JSON.parse(scriptTag.textContent);
+    const thumbUrl = Array.isArray(jsonData.thumbnailUrl) 
+      ? jsonData.thumbnailUrl[0] 
+      : jsonData.thumbnailUrl;
+      
+    console.log("Extracted thumbUrl:", thumbUrl);
+    return thumbUrl;
+  } catch (e) {
+    console.error("JSON parse error:", e);
     return null;
   }
-  // console.log("jsonData: ", jsonData);
-
-  const thumbUrl = jsonData.thumbnailUrl[0];
-  console.log("thumbUrl: ", thumbUrl);
-  return thumbUrl;
 }
 
 async function fetchThumb(pageUrlList) {
   const results = [];
   for (const pageUrl of pageUrlList) {
     try {
-      const data = await fetchHtml(pageUrl);
-      const thumbUrl = extractThumbUrl(data);
-      if (!thumbUrl) {
-        console.log("Fail to get thumbUrl, continue.");
-        continue;
+      const html = await fetchHtml(pageUrl);
+      const thumbUrl = extractThumbUrl(html);
+      if (thumbUrl) {
+        results.push({ pageUrl, thumbUrl });
       }
-      const thumb = { pageUrl: pageUrl, thumbUrl: thumbUrl };
-      results.push(thumb);
     } catch (e) {
-      console.error("Fail to fetch thumb for:", pageUrl, e);
+      console.error(\`Failed for \${pageUrl}:\`, e);
     }
   }
   return results;
 }
+
 async function main(pageUrlList) {
-  console.log("Start to run inject scripts.");
+  console.log("Script starting...");
   const results = await fetchThumb(pageUrlList);
-  return { status: "finished", results: results };
+  return { status: "finished", results };
 }
 
 return main(pageUrlList);
@@ -180,6 +136,14 @@ export const testFetchConfList: FetchConfig[] = [
     regexPattern: "^https:\\/\\/gayforfans\\.com\\/video\\/.+",
     selector: 'poster="(.*?)"',
     mode: "simple",
+  },
+  {
+    id: 5,
+    name: "The Gay",
+    hostname: "https://thegay.com/",
+    regexPattern: "^https:\\/\\/thegay.com\\/videos\\/.+",
+    selector: '"thumbnailUrl":"(.*?)"',
+    mode: "open_simple",
   },
 ];
 

@@ -186,7 +186,7 @@ export function ConfigPage() {
   const toggleDisplay = isMutiSelect ? "flex" : "none";
 
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, pt: { xs: 1, md: 1 }, maxWidth: 1000, mx: "auto" }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, pt: { xs: 1, md: 1 }, maxWidth: 1000, mx: "auto", mt: 2 }}>
       {/* Modern Header Area */}
       <HeaderBox enableAnimations={setting.enableAnimations}>
         <Box sx={{ zIndex: 1 }}>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Card,
   CardContent,
@@ -11,16 +11,23 @@ import {
   Tooltip,
   IconButton,
   Skeleton,
+  Checkbox,
 } from "@mui/material";
 import { styled, alpha } from "@mui/material/styles";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import LanguageIcon from "@mui/icons-material/Language";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import DownloadIcon from "@mui/icons-material/Download";
+import UploadIcon from "@mui/icons-material/Upload";
 
 import { CardItem } from "./PageItem";
+import { ContextMenu, ContextMenuItem } from "./ContextMenu";
+import { useStore } from "../store";
 
 // 定义ImageTextCard组件的props类型
 interface ImageTextCardProps {
-  image?: string | null;
+  bookmarkId: string;
+  // image prop removed, using store subscription
   title: string;
   url: string;
   tags?: string[];
@@ -58,8 +65,8 @@ const ContentArea = styled(Box)({
   padding: "20px 24px",
 });
 
-export const ImageTextCard: React.FC<ImageTextCardProps> = ({
-  image,
+export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
+  bookmarkId,
   title,
   url,
   tags = [],
@@ -67,6 +74,20 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = ({
   const hostname = new URL(url).hostname;
   const [isInView, setIsInView] = React.useState(false);
   const cardRef = React.useRef<HTMLDivElement>(null);
+
+  // Granular subscriptions to prevent unnecessary re-renders
+  const isSelected = useStore((state) => state.selectedBookmarkIds.includes(bookmarkId));
+  const isSelectionMode = useStore((state) => state.isSelectionMode);
+  const image = useStore((state) => state.loadedImageMap[bookmarkId]);
+
+  // Actions - these are stable reference from zustand
+  const setIsSelectionMode = useStore((state) => state.setIsSelectionMode);
+  const toggleBookmarkSelection = useStore((state) => state.toggleBookmarkSelection);
+  const forceFetchThumbnails = useStore((state) => state.forceFetchThumbnails);
+  const downloadThumbnail = useStore((state) => state.downloadThumbnail);
+  const uploadThumbnail = useStore((state) => state.uploadThumbnail);
+
+  const [contextMenu, setContextMenu] = React.useState<{ mouseX: number; mouseY: number } | null>(null);
 
   React.useEffect(() => {
     const observer = new IntersectionObserver(
@@ -89,9 +110,76 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = ({
     return () => observer.disconnect();
   }, []);
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setContextMenu(
+      contextMenu === null
+        ? { mouseX: e.clientX, mouseY: e.clientY }
+        : null
+    );
+  };
+
+  const handleCloseContextMenu = () => {
+    setContextMenu(null);
+  };
+
+  const handleFetchThumb = async () => {
+    await forceFetchThumbnails([bookmarkId]);
+  };
+
+  const handleDownloadThumb = async () => {
+    try {
+      await downloadThumbnail(bookmarkId);
+    } catch (error) {
+      alert('No thumbnail available to download');
+    }
+  };
+
+  const handleUploadThumb = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.onchange = async (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        try {
+          await uploadThumbnail(bookmarkId, file);
+        } catch (error) {
+          alert('Failed to upload thumbnail');
+        }
+      }
+    };
+    input.click();
+  };
+
+  const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.stopPropagation();
+    toggleBookmarkSelection(bookmarkId);
+  };
+
+  const contextMenuItems: ContextMenuItem[] = [
+    {
+      label: "Fetch thumb",
+      icon: <RefreshIcon fontSize="small" />,
+      onClick: handleFetchThumb,
+    },
+    {
+      label: "Download thumb",
+      icon: <DownloadIcon fontSize="small" />,
+      onClick: handleDownloadThumb,
+      disabled: !image,
+    },
+    {
+      label: "Upload thumb",
+      icon: <UploadIcon fontSize="small" />,
+      onClick: handleUploadThumb,
+    },
+  ];
+
   return (
     <CardItem
       ref={cardRef}
+      onContextMenu={handleContextMenu}
       sx={{
         p: 0,
         display: "flex",
@@ -99,8 +187,43 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = ({
         alignItems: "stretch",
         mb: 3,
         overflow: "hidden",
+        position: "relative",
+        border: (isSelected && isSelectionMode) ? "2px solid" : "none",
+        borderColor: "primary.main",
       }}
     >
+      {/* Selection Checkbox */}
+      {isSelectionMode && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: 8,
+            left: 8,
+            zIndex: 2,
+            backgroundColor: "rgba(255, 255, 255, 0.9)",
+            borderRadius: "50%",
+          }}
+        >
+          <Checkbox
+            checked={isSelected}
+            onChange={handleCheckboxChange}
+            size="small"
+            sx={{
+              "&.Mui-checked": {
+                color: "primary.main",
+              },
+            }}
+          />
+        </Box>
+      )}
+
+      <ContextMenu
+        open={contextMenu !== null}
+        anchorPosition={contextMenu ? { top: contextMenu.mouseY, left: contextMenu.mouseX } : null}
+        onClose={handleCloseContextMenu}
+        items={contextMenuItems}
+      />
+
       {/* Image Section */}
       <ImageContainer>
         <Link
@@ -208,7 +331,7 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = ({
       </ContentArea>
     </CardItem>
   );
-};
+});
 
 // // 示例数据
 // const sampleData: CardItem[] = [

@@ -11,12 +11,13 @@ import {
   filterBookmarkByMatchPattern,
   checkBookmarksLoadStatus,
 } from "../utils";
+import { getAllBookmarksInFolder, createFetchTasksForBookmarks } from "../utils/folderUtils";
+import { downloadThumbnailAsFile, uploadThumbnailFile, downloadMultipleThumbnails } from "../utils/thumbnailUtils";
+import { messageId } from "../../global/message";
 
 import { SETTINGS_KEY, CONFIGS_KEY } from "../consts";
 
 type BookmarkMap = Record<string, BookmarkTreeNode>;
-
-// export const loadedImageList: LoadedImage[] = [];
 
 type storeState = {
   setting: Setting;
@@ -36,6 +37,11 @@ type storeState = {
   sidebarOpen: boolean;
   selectedFolderId: string;
   expandedFolderIds: string[];
+  // Multi-selection
+  selectedBookmarkIds: string[];
+  // Loading state
+  isLoadingBookmarks: boolean;
+  isSelectionMode: boolean;
 };
 
 type storeAction = {
@@ -60,6 +66,19 @@ type storeAction = {
   setSelectedFolderId: (id: string) => void;
   setSidebarOpen: (open: boolean) => void;
   setExpandedFolderIds: (ids: string[]) => void;
+  // Multi-selection actions
+  setSelectedBookmarkIds: (ids: string[]) => void;
+  toggleBookmarkSelection: (id: string) => void;
+  clearSelection: () => void;
+  // Loading action
+  setLoadingBookmarks: (loading: boolean) => void;
+  setIsSelectionMode: (mode: boolean) => void;
+  // Context menu actions
+  getAllBookmarksInFolderAction: (folderId: string) => BookmarkTreeNode[];
+  forceFetchThumbnails: (bookmarkIds: string[]) => Promise<void>;
+  downloadThumbnail: (bookmarkId: string) => Promise<void>;
+  uploadThumbnail: (bookmarkId: string, file: File) => Promise<void>;
+  downloadMultipleThumbnailsAction: (bookmarkIds: string[]) => Promise<void>;
 };
 
 type Store = storeState & storeAction;
@@ -259,6 +278,95 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     set(() => ({ expandedFolderIds: ids }));
     get().setSetting({ expandedFolderIds: ids });
   },
+  // Multi-selection actions
+  setSelectedBookmarkIds: (ids: string[]) => {
+    set(() => ({ selectedBookmarkIds: ids }));
+  },
+  toggleBookmarkSelection: (id: string) => {
+    const current = get().selectedBookmarkIds;
+    if (current.includes(id)) {
+      set(() => ({ selectedBookmarkIds: current.filter(i => i !== id) }));
+    } else {
+      set(() => ({ selectedBookmarkIds: [...current, id] }));
+    }
+  },
+  clearSelection: () => {
+    set(() => ({ selectedBookmarkIds: [], isSelectionMode: false }));
+  },
+  setIsSelectionMode: (mode: boolean) => {
+    set(() => ({ isSelectionMode: mode }));
+    if (!mode) {
+      set(() => ({ selectedBookmarkIds: [] }));
+    }
+  },
+  // Loading action
+  setLoadingBookmarks: (loading: boolean) => {
+    set(() => ({ isLoadingBookmarks: loading }));
+  },
+  // Context menu actions
+  getAllBookmarksInFolderAction: (folderId: string) => {
+    const folder = get().bookmarkMap[folderId];
+    if (!folder) return [];
+    return getAllBookmarksInFolder(folder, get().bookmarkMap);
+  },
+  forceFetchThumbnails: async (bookmarkIds: string[]) => {
+    const bookmarkMap = get().bookmarkMap;
+    const fetchConfigList = get().fetchConfigList;
+
+    const bookmarks = bookmarkIds
+      .map(id => bookmarkMap[id])
+      .filter(bk => bk && bk.url);
+
+    if (bookmarks.length === 0) return;
+
+    const fetchTasks = createFetchTasksForBookmarks(bookmarks, fetchConfigList);
+
+    if (fetchTasks.length > 0) {
+      await browser.runtime.sendMessage({
+        type: messageId.getThumb,
+        fetchTaskList: fetchTasks,
+      });
+    }
+  },
+  downloadThumbnail: async (bookmarkId: string) => {
+    const blobUrl = get().loadedImageMap[bookmarkId];
+    if (!blobUrl) {
+      throw new Error('No thumbnail available for this bookmark');
+    }
+
+    const bookmark = get().bookmarkMap[bookmarkId];
+    const filename = `${bookmark.title || 'bookmark'}_thumb.jpg`;
+
+    await downloadThumbnailAsFile(blobUrl, filename);
+  },
+  uploadThumbnail: async (bookmarkId: string, file: File) => {
+    const bookmark = get().bookmarkMap[bookmarkId];
+    if (!bookmark || !bookmark.url) {
+      throw new Error('Invalid bookmark');
+    }
+
+    const blobUrl = await uploadThumbnailFile(file, bookmark.url);
+
+    // Update the loaded image map
+    get().updateLoadedImageMap({ [bookmarkId]: blobUrl });
+  },
+  downloadMultipleThumbnailsAction: async (bookmarkIds: string[]) => {
+    const loadedImageMap = get().loadedImageMap;
+    const bookmarkMap = get().bookmarkMap;
+
+    const thumbnails = bookmarkIds
+      .filter(id => loadedImageMap[id])
+      .map(id => ({
+        blobUrl: loadedImageMap[id],
+        filename: `${bookmarkMap[id]?.title || 'bookmark'}_thumb.jpg`,
+      }));
+
+    if (thumbnails.length === 0) {
+      throw new Error('No thumbnails available for selected bookmarks');
+    }
+
+    await downloadMultipleThumbnails(thumbnails);
+  },
 });
 
 export const useStore = create<Store>()((...action) => ({
@@ -284,5 +392,10 @@ export const useStore = create<Store>()((...action) => ({
   sidebarOpen: true,
   selectedFolderId: "all",
   expandedFolderIds: [],
+  // Multi-selection init
+  selectedBookmarkIds: [],
+  // Loading state init
+  isLoadingBookmarks: false,
+  isSelectionMode: false,
   ...actionSlice(...action),
 }));

@@ -9,17 +9,22 @@ import {
 import { ImageTextCard } from "../Components/ImageTextCard";
 import { BoxItem } from "../Components/PageItem";
 
-import { Box, Typography, Button, Toolbar, TextField, InputAdornment, IconButton, useMediaQuery, useTheme, Drawer, Divider, Stack } from "@mui/material";
+import { Box, Typography, Button, Toolbar, TextField, InputAdornment, IconButton, useMediaQuery, useTheme, Drawer, Divider, Stack, Fab, CircularProgress, Paper, Chip } from "@mui/material";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import MenuIcon from "@mui/icons-material/Menu";
 import SettingsIcon from "@mui/icons-material/Settings";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import DownloadIcon from "@mui/icons-material/Download";
+import CloseIcon from "@mui/icons-material/Close";
 import { FolderTree } from "../Components/FolderTree";
 import { FolderCard } from "../Components/FolderCard";
 import { FetchSettingsDialog } from "../Components/FetchSettingsDialog";
+import { SelectionActionBar } from "../Components/SelectionActionBar";
 
 import { NavBar } from "../Components/NavBar";
 import LaunchIcon from "@mui/icons-material/Launch";
+import ChecklistIcon from "@mui/icons-material/Checklist";
 
 async function startGetThumb(fetchTaskList: FetchTask[]): Promise<void> {
   if (fetchTaskList.length > 0) {
@@ -58,7 +63,8 @@ export function ViewerPage() {
   const bookmarkList = useStore((state) => state.bookmarkList);
   const matchBookmarks = useStore((state) => state.matchBookmarks);
 
-  const loadedImageMap = useStore((state) => state.loadedImageMap);
+  // Removed loadedImageMap subscription to prevent full page re-renders
+  // const loadedImageMap = useStore((state) => state.loadedImageMap);
 
   const matchedBookmarks = useStore((state) => state.matchedBookmarks);
   const fetchTaskList = useStore((state) => state.fetchTaskList);
@@ -73,6 +79,15 @@ export function ViewerPage() {
   const selectedFolderId = useStore((state) => state.selectedFolderId);
   const setSelectedFolderId = useStore((state) => state.setSelectedFolderId);
   const bookmarkMap = useStore((state) => state.bookmarkMap);
+  // selectedBookmarkIds removed, handled by SelectionActionBar
+  // const selectedBookmarkIds = useStore((state) => state.selectedBookmarkIds);
+  const clearSelection = useStore((state) => state.clearSelection);
+  const forceFetchThumbnails = useStore((state) => state.forceFetchThumbnails);
+  const downloadMultipleThumbnailsAction = useStore((state) => state.downloadMultipleThumbnailsAction);
+  const isLoadingBookmarks = useStore((state) => state.isLoadingBookmarks);
+  const setLoadingBookmarks = useStore((state) => state.setLoadingBookmarks);
+  const isSelectionMode = useStore((state) => state.isSelectionMode);
+  const setIsSelectionMode = useStore((state) => state.setIsSelectionMode);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -85,7 +100,12 @@ export function ViewerPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const startMatchBookmarks = async () => {
-    await matchBookmarks();
+    setLoadingBookmarks(true);
+    try {
+      await matchBookmarks();
+    } finally {
+      setLoadingBookmarks(false);
+    }
   };
 
   useEffect(() => {
@@ -136,9 +156,9 @@ export function ViewerPage() {
     }
   };
 
-  const getThumbSrc = (bkId: string) => {
-    return loadedImageMap[bkId] || "";
-  };
+  // const getThumbSrc = (bkId: string) => {
+  //   return loadedImageMap[bkId] || "";
+  // };
 
   // Identify folders that contain matched bookmarks in their subtree
   const matchedFolderIds = useMemo(() => {
@@ -227,6 +247,10 @@ export function ViewerPage() {
 
     return items;
   }, [selectedFolderId, matchedBookmarks, searchQuery, bookmarkMap, matchedFolderIds]);
+
+  // Handlers moved to SelectionActionBar
+  // const handleBatchFetchThumbs = async () => { ... }
+  // const handleBatchDownloadThumbs = async () => { ... }
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
@@ -367,6 +391,15 @@ export function ViewerPage() {
           <Stack direction="row" alignItems="center" spacing={1}>
             {!isFetching && (
               <IconButton
+                color={isSelectionMode ? "primary" : "default"}
+                onClick={() => setIsSelectionMode(!isSelectionMode)}
+                title="Toggle selection mode"
+              >
+                <ChecklistIcon />
+              </IconButton>
+            )}
+            {!isFetching && (
+              <IconButton
                 color="primary"
                 onClick={() => setSettingsDialogOpen(true)}
               >
@@ -440,12 +473,19 @@ export function ViewerPage() {
         </Box>
 
         <Box sx={{ pb: 8 }}>
-          {displayItems.length === 0 && (
+          {isLoadingBookmarks && (
+            <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", py: 10 }}>
+              <CircularProgress size={60} thickness={4} />
+            </Box>
+          )}
+
+          {!isLoadingBookmarks && displayItems.length === 0 && (
             <Box sx={{ py: 10, textAlign: "center", color: "text.secondary" }}>
               <Typography variant="body1">No items found in this folder matching your configs.</Typography>
             </Box>
           )}
-          {displayItems.map((item) => {
+
+          {!isLoadingBookmarks && displayItems.map((item) => {
             const bk = item.data;
             if (item.type === 'folder') {
               return (
@@ -461,17 +501,20 @@ export function ViewerPage() {
             const id = bk.id;
             const title = bk.title;
             const url = bk.url as string;
-            const thumbBlobUrl = getThumbSrc(id);
+            // No need to pass image prop anymore
             return (
               <ImageTextCard
                 key={id}
-                image={thumbBlobUrl}
+                bookmarkId={id}
                 title={title}
                 url={url}
               />
             );
           })}
         </Box>
+
+        {/* Multi-selection Floating Action Bar */}
+        <SelectionActionBar />
       </Box>
     </Box>
   );

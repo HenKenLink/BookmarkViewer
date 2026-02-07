@@ -43,7 +43,7 @@ const ContentArea = styled(Box)({
     padding: "8px 24px",
 });
 
-export const FolderCard: React.FC<FolderCardProps> = ({
+export const FolderCard: React.FC<FolderCardProps> = React.memo(({
     title,
     onClick,
     itemCount,
@@ -106,4 +106,4 @@ export const FolderCard: React.FC<FolderCardProps> = ({
             </ContentArea>
         </CardItem>
     );
-};
+});

@@ -17,7 +17,7 @@ export type BookmarkFetchItem = {
   isLoaded: boolean;
 };
 
-export type FetchMode = "inject" | "simple";
+export type FetchMode = "inject" | "simple" | "open_simple";
 export type SelectorType = "regex" | "css" | "xpath";
 
 // 按配置分组的获取任务
