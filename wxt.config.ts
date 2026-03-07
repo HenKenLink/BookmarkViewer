@@ -36,5 +36,7 @@ export default defineConfig({
     binaries: {
       chrome: "/usr/bin/brave-browser",
     },
+    // 使用项目下的独立目录，避免与日常使用的浏览器配置冲突
+    // chromiumProfile: "./.wxt/test-profile",
   },
 });

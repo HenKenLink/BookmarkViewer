@@ -6,6 +6,7 @@ import { useState, useEffect } from "react";
 import { ViewerPage } from "./Pages/viewerPage";
 import { ConfigPage } from "./Pages/configPage";
 import { ConfigEditPage } from "./Pages/configEditPage";
+import { SettingsPage } from "./Pages/settingsPage";
 import { useLoadBookmarks } from "./hooks/useLoadBookmarks";
 import { NavItem } from "@/entrypoints/global/types";
 
@@ -22,6 +23,10 @@ const navItemList: NavItem[] = [
   {
     name: "Config",
     path: "/config",
+  },
+  {
+    name: "Settings",
+    path: "/settings",
   },
 ];
 
@@ -133,6 +138,7 @@ export default function App() {
             <Route path="/config" element={<ConfigPage />} />
             <Route path="/config/:id" element={<ConfigEditPage />} />
             <Route path="/config/new" element={<ConfigEditPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </Box>
       </Router>

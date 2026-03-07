@@ -79,6 +79,7 @@ type storeAction = {
   downloadThumbnail: (bookmarkId: string) => Promise<void>;
   uploadThumbnail: (bookmarkId: string, file: File) => Promise<void>;
   downloadMultipleThumbnailsAction: (bookmarkIds: string[]) => Promise<void>;
+  clearAllCovers: () => Promise<void>;
 };
 
 type Store = storeState & storeAction;
@@ -366,6 +367,22 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     }
 
     await downloadMultipleThumbnails(thumbnails);
+  },
+  clearAllCovers: async () => {
+    // 1. Get all keys
+    const all = await browser.storage.local.get(null);
+    const keys = Object.keys(all);
+
+    // 2. Filter keys to keep (settings and configs)
+    const keysToRemove = keys.filter(key => key !== SETTINGS_KEY && key !== CONFIGS_KEY);
+
+    // 3. Remove other keys
+    if (keysToRemove.length > 0) {
+      await browser.storage.local.remove(keysToRemove);
+    }
+
+    // 4. Clear memory state
+    get().clearLoadedImageMap();
   },
 });
 

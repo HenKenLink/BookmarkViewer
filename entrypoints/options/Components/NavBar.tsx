@@ -27,7 +27,6 @@ import { NavItem } from "@/entrypoints/global/types";
 import SettingsBackupRestoreIcon from "@mui/icons-material/SettingsBackupRestore";
 
 import { useStore } from "../store";
-import { ExportImportDialog } from "./ExportImportDialog";
 
 const drawerWidth = 240;
 
@@ -42,7 +41,6 @@ export function NavBar(props: NavProps) {
 
   const { window: windowProp } = props;
   const [mobileOpen, setMobileOpen] = React.useState(false);
-  const [backupDialogOpen, setBackupDialogOpen] = React.useState(false);
 
   const handleDrawerToggle = () => {
     setMobileOpen((prevState) => !prevState);
@@ -52,17 +50,7 @@ export function NavBar(props: NavProps) {
     await setSetting({ darkMode: setting.darkMode ? false : true });
   };
 
-  const toggleAnimations = async () => {
-    await setSetting({ enableAnimations: !setting.enableAnimations });
-  };
 
-  const handleOpenBackupDialog = () => {
-    setBackupDialogOpen(true);
-  };
-
-  const handleCloseBackupDialog = () => {
-    setBackupDialogOpen(false);
-  };
 
   const drawer = (
     <Box onClick={handleDrawerToggle} sx={{ textAlign: "center" }}>
@@ -138,29 +126,6 @@ export function NavBar(props: NavProps) {
               ))}
             </Box>
             <Box>
-              <Tooltip title="Backup & Restore">
-                <IconButton
-                  onClick={handleOpenBackupDialog}
-                  sx={{
-                    color: "white",
-                    "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.15)" }
-                  }}
-                >
-                  <SettingsBackupRestoreIcon />
-                </IconButton>
-              </Tooltip>
-              <Tooltip title={setting.enableAnimations ? "Disable Animations" : "Enable Animations"}>
-                <IconButton
-                  onClick={toggleAnimations}
-                  sx={{
-                    ml: 1,
-                    color: "white",
-                    "&:hover": { backgroundColor: "rgba(255, 255, 255, 0.15)" }
-                  }}
-                >
-                  {setting.enableAnimations ? <AutoFixHighIcon /> : <AutoFixOffIcon />}
-                </IconButton>
-              </Tooltip>
               <IconButton
                 onClick={toggleDarkMode}
                 sx={{
@@ -187,10 +152,6 @@ export function NavBar(props: NavProps) {
             </IconButton>
           </Toolbar>
         </AppBar>
-        <ExportImportDialog
-          open={backupDialogOpen}
-          onClose={handleCloseBackupDialog}
-        />
         <nav>
           <Drawer
             container={container}

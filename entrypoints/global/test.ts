@@ -4,17 +4,33 @@ import { CONFIGS_KEY } from "../options/consts";
 
 // 添加parentId会报错
 const testBookmarkList: CreateDetails[] = [
+  // {
+  //   title: "Teddy Bryce and Trenton Ducatti Fuckin Teddy Naked With",
+  //   url: "https://thegay.com/videos/1161629/teddy-bryce-and-trenton-ducatti-fuckin-teddy-naked-with/?fr=1161629&rp=1",
+  // },
+  // {
+  //   title: "Doms and Breeds Nerdy Sub at Dungeon East with Jay Austin and Teddy Bryce",
+  //   url: "https://thegay.com/videos/1603735/doms-and-breeds-nerdy-sub-at-dungeon-east-with-jay-austin-and-teddy-bryce/?fr=1603735&rp=1",
+  // },
+  // {
+  //   title: "Austin Finally Breeds Kip",
+  //   url: "https://thegay.com/videos/1135577/austin-finally-breeds-kip/",
+  // },
   {
-    title: "Teddy Bryce and Trenton Ducatti Fuckin Teddy Naked With",
-    url: "https://thegay.com/videos/1161629/teddy-bryce-and-trenton-ducatti-fuckin-teddy-naked-with/?fr=1161629&rp=1",
+    title: "Jeins Carter Ass",
+    url: "https://www.boyfriendtv.com/es/videos/1581310/jeins-carter-ass-show-25-12-08/",
   },
   {
-    title: "Doms and Breeds Nerdy Sub at Dungeon East with Jay Austin and Teddy Bryce",
-    url: "https://thegay.com/videos/1603735/doms-and-breeds-nerdy-sub-at-dungeon-east-with-jay-austin-and-teddy-bryce/?fr=1603735&rp=1",
+    title: "Stud Takes Huge Cock",
+    url: "https://cc.boyfriendtv.com/pv/bftv/2026-02/pv_480af3e6c831906c44167c87211b5ea2.mp4",
   },
   {
-    title: "Austin Finally Breeds Kip",
-    url: "https://thegay.com/videos/1135577/austin-finally-breeds-kip/",
+    title: "Daddy Gets Pounded By BBC",
+    url: "https://www.boyfriendtv.com/es/videos/1580900/daddy-gets-pounded-by-bbc/?tag=anal%20big%20cock%20interracial%20gay%20sex%20studs%20black",
+  },
+  {
+    title: "Hairy Daddy Fucks Slut",
+    url: "https://www.boyfriendtv.com/es/videos/1580766/hairy-daddy-fucks-slut/?tag=anal%20big%20cock%20blowjob%20gay%20sex%20studs%20black%20daddy",
   },
 ];
 

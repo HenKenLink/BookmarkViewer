@@ -19,6 +19,7 @@ import LanguageIcon from "@mui/icons-material/Language";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
 import UploadIcon from "@mui/icons-material/Upload";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 
 import { CardItem } from "./PageItem";
 import { ContextMenu, ContextMenuItem } from "./ContextMenu";
@@ -157,6 +158,18 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
     toggleBookmarkSelection(bookmarkId);
   };
 
+  const handleCardClick = () => {
+    if (isSelectionMode) {
+      toggleBookmarkSelection(bookmarkId);
+    }
+  };
+
+  const handleLinkClick = (e: React.MouseEvent) => {
+    if (isSelectionMode) {
+      e.preventDefault();
+    }
+  };
+
   const contextMenuItems: ContextMenuItem[] = [
     {
       label: "Fetch thumb",
@@ -174,13 +187,25 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
       icon: <UploadIcon fontSize="small" />,
       onClick: handleUploadThumb,
     },
+    {
+      label: "Select",
+      icon: <CheckCircleIcon fontSize="small" />,
+      onClick: () => {
+        setIsSelectionMode(true);
+        if (!isSelected) {
+          toggleBookmarkSelection(bookmarkId);
+        }
+      },
+    },
   ];
 
   return (
     <CardItem
       ref={cardRef}
+      onClick={handleCardClick}
       onContextMenu={handleContextMenu}
       sx={{
+        cursor: isSelectionMode ? "pointer" : "default",
         p: 0,
         display: "flex",
         flexDirection: { xs: "column", sm: "row" },
@@ -228,6 +253,7 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
       <ImageContainer>
         <Link
           href={url}
+          onClick={handleLinkClick}
           target="_blank"
           rel="noopener noreferrer"
           underline="none"
@@ -272,6 +298,7 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
           <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 2 }}>
             <Link
               href={url}
+              onClick={handleLinkClick}
               target="_blank"
               rel="noopener noreferrer"
               underline="none"
@@ -299,6 +326,7 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
               size="small"
               component="a"
               href={url}
+              onClick={handleLinkClick}
               target="_blank"
               sx={{ color: "grey.400", mt: -0.5 }}
             >
@@ -322,7 +350,7 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
               key={index}
               label={tag}
               size="small"
-              variant="soft"
+              variant="outlined"
               color="primary"
               sx={{ borderRadius: "6px", fontWeight: 500 }}
             />
