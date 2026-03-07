@@ -1,7 +1,8 @@
+import { logger } from "./logger";
 // import { PageUrl } from "./types";
 
 export function waitForTabLoad(tabId: number, timeoutMs = 30000, signal?: AbortSignal): Promise<void> {
-  console.log(`[Utils] Start waiting for tab ${tabId} to load (timeout: ${timeoutMs}ms)`);
+  logger.info(`[Utils] Start waiting for tab ${tabId} to load (timeout: ${timeoutMs}ms)`);
   return new Promise(async (resolve, reject) => {
     let timer: any;
 
@@ -15,10 +16,10 @@ export function waitForTabLoad(tabId: number, timeoutMs = 30000, signal?: AbortS
     const onUpdated = (updatedTabId: number, changeInfo: any) => {
       if (updatedTabId === tabId) {
         if (changeInfo.status) {
-          console.log(`[Utils] Tab ${tabId} status updated: ${changeInfo.status}`);
+          logger.info(`[Utils] Tab ${tabId} status updated: ${changeInfo.status}`);
         }
         if (changeInfo.status === "complete") {
-          console.log(`[Utils] Tab ${tabId} load complete`);
+          logger.info(`[Utils] Tab ${tabId} load complete`);
           cleanup();
           resolve();
         }
@@ -27,20 +28,20 @@ export function waitForTabLoad(tabId: number, timeoutMs = 30000, signal?: AbortS
 
     const onRemoved = (removedTabId: number) => {
       if (removedTabId === tabId) {
-        console.warn(`[Utils] Tab ${tabId} removed while waiting`);
+        logger.warn(`[Utils] Tab ${tabId} removed while waiting`);
         cleanup();
         reject(new Error(`Tab ${tabId} was closed`));
       }
     };
 
     const onAbort = () => {
-      console.log(`[Utils] Tab ${tabId} wait aborted`);
+      logger.info(`[Utils] Tab ${tabId} wait aborted`);
       cleanup();
       reject(new Error("Aborted"));
     };
 
     if (signal?.aborted) {
-      console.log(`[Utils] Tab ${tabId} wait already aborted`);
+      logger.info(`[Utils] Tab ${tabId} wait already aborted`);
       reject(new Error("Aborted"));
       return;
     }
@@ -52,20 +53,20 @@ export function waitForTabLoad(tabId: number, timeoutMs = 30000, signal?: AbortS
     try {
       const tab = await browser.tabs.get(tabId);
       if (tab.status === 'complete') {
-        console.log(`[Utils] Tab ${tabId} is already complete`);
+        logger.info(`[Utils] Tab ${tabId} is already complete`);
         cleanup();
         resolve();
         return;
       }
     } catch (e) {
-      console.error(`[Utils] Tab ${tabId} not found initially`, e);
+      logger.error(`[Utils] Tab ${tabId} not found initially`, e);
       cleanup();
       reject(new Error(`Tab ${tabId} not found`));
       return;
     }
 
     timer = setTimeout(() => {
-      console.error(`[Utils] Timeout reached for tab ${tabId}`);
+      logger.error(`[Utils] Timeout reached for tab ${tabId}`);
       cleanup();
       reject(new Error(`Timeout waiting for tab ${tabId} to load`));
     }, timeoutMs);

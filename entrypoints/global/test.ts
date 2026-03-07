@@ -1,3 +1,4 @@
+import { logger } from "./logger";
 type CreateDetails = Browser.bookmarks.CreateDetails;
 import { FetchConfig } from "./types";
 import { CONFIGS_KEY } from "../options/consts";
@@ -37,7 +38,7 @@ const testBookmarkList: CreateDetails[] = [
 // https://www.boyfriendtv.com/es/videos/1301842/bottom-takes-a-monstercock-in-her-big-ass/
 
 export async function testAddBookmarks() {
-  console.log("[Test] Starting to add test bookmarks...");
+  logger.info("[Test] Starting to add test bookmarks...");
   for (const bk of testBookmarkList) {
     try {
       // Check if bookmark already exists to avoid redundant additions
@@ -46,76 +47,10 @@ export async function testAddBookmarks() {
         await browser.bookmarks.create(bk);
       }
     } catch (e) {
-      console.error("Fail to add test bookmark:", bk.url, e);
+      logger.error("Fail to add test bookmark:", bk.url, e);
     }
   }
 }
-
-const fetchScript = `
-async function fetchHtml(url) {
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Firefox/139.0",
-        "Referer": "https://www.boyfriendtv.com/",
-      },
-    });
-    if (!response.ok) throw new Error(\`HTTP error! status: \${response.status}\`);
-    return await response.text();
-  } catch (error) {
-    console.error("FetchHtml Error:", error);
-    throw error;
-  }
-}
-
-function extractThumbUrl(html) {
-  console.log("Parsing html...");
-  const doc = new DOMParser().parseFromString(html, "text/html");
-  const scriptTag = doc.querySelector('script[type="application/ld+json"]');
-  
-  if (!scriptTag?.textContent) {
-    console.error("LD+JSON script tag not found.");
-    return null;
-  }
-
-  try {
-    const jsonData = JSON.parse(scriptTag.textContent);
-    const thumbUrl = Array.isArray(jsonData.thumbnailUrl) 
-      ? jsonData.thumbnailUrl[0] 
-      : jsonData.thumbnailUrl;
-      
-    console.log("Extracted thumbUrl:", thumbUrl);
-    return thumbUrl;
-  } catch (e) {
-    console.error("JSON parse error:", e);
-    return null;
-  }
-}
-
-async function fetchThumb(pageUrlList) {
-  const results = [];
-  for (const pageUrl of pageUrlList) {
-    try {
-      const html = await fetchHtml(pageUrl);
-      const thumbUrl = extractThumbUrl(html);
-      if (thumbUrl) {
-        results.push({ pageUrl, thumbUrl });
-      }
-    } catch (e) {
-      console.error(\`Failed for \${pageUrl}:\`, e);
-    }
-  }
-  return results;
-}
-
-async function main(pageUrlList) {
-  console.log("Script starting...");
-  const results = await fetchThumb(pageUrlList);
-  return { status: "finished", results };
-}
-
-return main(pageUrlList);
-`;
 
 // igayvideosFetchScript removed as it's now using simple mode
 
@@ -126,8 +61,9 @@ export const testFetchConfList: FetchConfig[] = [
     hostname: "www.boyfriendtv.com",
     regexPattern:
       "^https:\\/\\/www\\.boyfriendtv\\.com(?:\\/es)?\\/videos\\/.+",
-    fetchScript: fetchScript,
-    mode: "inject",
+    selector: '"thumbnailUrl":\\["([^"]+)"',
+    selectorType: 'regex',
+    mode: "simple",
   },
   {
     id: 2,
@@ -179,8 +115,8 @@ export async function testStorageConfig(): Promise<void> {
 //     "blob:moz-extension://af68e598-f819-4879-928c-c7e68d969e53/6a81730a-933f-4f73-aaa4-9391a4f52785"
 //   )
 //     .then((res) => res.blob())
-//     .then((blob) => console.log("Valid blob url:", blob))
+//     .then((blob) => logger.info("Valid blob url:", blob))
 //     .catch((err) =>
-//       console.error("Not valid blob url, url has been revoked:", err)
+//       logger.error("Not valid blob url, url has been revoked:", err)
 //     );
 // }

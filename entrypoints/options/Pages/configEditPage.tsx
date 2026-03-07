@@ -27,12 +27,9 @@ import { useMediaQuery, useTheme } from "@mui/material";
 
 import { useNavigate, useParams } from "react-router-dom";
 
-import CodeMirror from "@uiw/react-codemirror";
-import { javascript } from "@codemirror/lang-javascript";
-import { okaidia } from "@uiw/codemirror-theme-okaidia";
 import { autocompletion } from "@codemirror/autocomplete";
 
-import { FetchConfig, SelectorType } from "@/entrypoints/global/types";
+import { FetchConfig, SelectorType, FetchMode } from "@/entrypoints/global/types";
 import { toast } from "sonner";
 import InfoIcon from "@mui/icons-material/Info";
 import LanguageIcon from "@mui/icons-material/Language";
@@ -42,7 +39,6 @@ import SaveIcon from "@mui/icons-material/Save";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import EditIcon from "@mui/icons-material/Edit";
 import AddIcon from "@mui/icons-material/Add";
-import TerminalIcon from "@mui/icons-material/Terminal";
 import TextFieldsIcon from "@mui/icons-material/TextFields";
 import TuneIcon from "@mui/icons-material/Tune";
 
@@ -216,8 +212,7 @@ export function ConfigEditPage() {
     const [configName, setConfigName] = useState<string>("");
     const [configHostname, setConfigHostname] = useState<string>("");
     const [configRegexPettern, setConfigRegexPettern] = useState<string>("");
-    const [configScript, setConfigScript] = useState<string>("");
-    const [configMode, setConfigMode] = useState<"inject" | "simple" | "open_simple">("inject");
+    const [configMode, setConfigMode] = useState<FetchMode>("open_simple");
     const [configSelector, setConfigSelector] = useState<string>("");
     const [configSelectorType, setConfigSelectorType] =
         useState<SelectorType>("regex");
@@ -257,10 +252,9 @@ export function ConfigEditPage() {
                 navigateBack();
                 return;
             }
-            setConfigScript(matchedConfig.fetchScript || "");
             setConfigName(matchedConfig.name);
             setConfigHostname(matchedConfig.hostname);
-            setConfigMode(matchedConfig.mode || "inject");
+            setConfigMode(matchedConfig.mode || "open_simple");
             const initialSelectorType = matchedConfig.selectorType || "regex";
             setConfigSelectorType(initialSelectorType);
 
@@ -287,13 +281,6 @@ export function ConfigEditPage() {
     }, []);
 
     // const name = matchedConfig ? matchedConfig.name : "";
-    const [view, setView] = useState();
-
-    const onCreateEditor = (view: any, state: any) => {
-        setView(view);
-        // 你可以在这里访问 view 和 state 实例
-        // 例如：view.dispatch(...)
-    };
 
     const direction = matches ? "row" : "column";
 
@@ -317,7 +304,6 @@ export function ConfigEditPage() {
         if (
             !configName ||
             !configHostname ||
-            (configMode === "inject" && !configScript) ||
             (configMode === "open_simple" && !configSelector) ||
             (configMode === "simple" && !configSelector)
         ) {
@@ -331,7 +317,6 @@ export function ConfigEditPage() {
             name: configName,
             hostname: configHostname,
             regexPattern: configRegexPettern,
-            fetchScript: configMode === "inject" ? configScript : undefined,
             mode: configMode,
             selector: (configMode === "simple" || configMode === "open_simple") ? configSelector : undefined,
             selectorType: (configMode === "simple" || configMode === "open_simple") ? configSelectorType : undefined,
@@ -555,13 +540,6 @@ export function ConfigEditPage() {
                                     {/* Mode Selector */}
                                     <ModeSelector>
                                         <ModeButton
-                                            active={configMode === "inject"}
-                                            onClick={() => setConfigMode("inject")}
-                                            startIcon={<TerminalIcon />}
-                                        >
-                                            Inject Script
-                                        </ModeButton>
-                                        <ModeButton
                                             active={configMode === "open_simple"}
                                             onClick={() => setConfigMode("open_simple")}
                                             startIcon={<LanguageIcon />}
@@ -669,77 +647,6 @@ export function ConfigEditPage() {
                                                     }));
                                                 }}
                                             />
-                                        </Box>
-                                    </Collapse>
-
-                                    {/* Inject Mode */}
-                                    <Collapse in={configMode === "inject"} sx={{ flex: 1 }} timeout={setting.enableAnimations ? undefined : 0}>
-                                        <Box
-                                            sx={{
-                                                display: "flex",
-                                                flexDirection: "column",
-                                                gap: 1.5,
-                                                height: "100%",
-                                            }}
-                                        >
-                                            <Box
-                                                sx={{
-                                                    display: "flex",
-                                                    alignItems: "center",
-                                                    justifyContent: "space-between",
-                                                }}
-                                            >
-                                                <Typography
-                                                    variant="subtitle2"
-                                                    color="text.secondary"
-                                                    fontWeight={600}
-                                                >
-                                                    JavaScript Code
-                                                </Typography>
-                                                <Typography
-                                                    variant="caption"
-                                                    color="text.disabled"
-                                                    sx={{
-                                                        backgroundColor: (theme) =>
-                                                            alpha(theme.palette.grey[500], 0.1),
-                                                        px: 1.5,
-                                                        py: 0.5,
-                                                        borderRadius: 2,
-                                                    }}
-                                                >
-                                                    Return the URL to fetch
-                                                </Typography>
-                                            </Box>
-                                            <Paper
-                                                elevation={0}
-                                                sx={{
-                                                    border: "1px solid",
-                                                    borderColor: "divider",
-                                                    borderRadius: 3,
-                                                    overflow: "hidden",
-                                                    flex: 1,
-                                                    minHeight: 400,
-                                                    "& .cm-editor": {
-                                                        height: "100%",
-                                                    },
-                                                    "& .cm-scroller": {
-                                                        fontFamily:
-                                                            '"JetBrains Mono", "Fira Code", monospace',
-                                                        fontSize: "14px",
-                                                    },
-                                                }}
-                                            >
-                                                <CodeMirror
-                                                    height="100%"
-                                                    style={{ height: "100%" }}
-                                                    onCreateEditor={onCreateEditor}
-                                                    extensions={[javascript({ jsx: true }), autocompletion()]}
-                                                    value={configScript}
-                                                    onChange={(value) => {
-                                                        setConfigScript(value);
-                                                    }}
-                                                />
-                                            </Paper>
                                         </Box>
                                     </Collapse>
                                 </CardContent>

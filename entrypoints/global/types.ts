@@ -16,9 +16,9 @@ export type BookmarkFetchItem = {
   configId: number;
   isLoaded: boolean;
 };
-
-export type FetchMode = "inject" | "simple" | "open_simple";
+export type FetchMode = "simple" | "open_simple";
 export type SelectorType = "regex" | "css" | "xpath";
+export type LogLevel = "debug" | "info" | "warn" | "error" | "none";
 
 // 按配置分组的获取任务
 export type FetchTask = {
@@ -31,7 +31,6 @@ export type FetchConfig = {
   name: string;
   hostname: string;
   regexPattern?: string;
-  fetchScript?: string;
   mode: FetchMode;
   selector?: string;
   selectorType?: SelectorType;
@@ -53,4 +52,5 @@ export type Setting = {
   fetchDelayTimeMin: number;
   fetchDelayTimeMax: number;
   enableDelay: boolean;
+  logLevel: LogLevel;
 };

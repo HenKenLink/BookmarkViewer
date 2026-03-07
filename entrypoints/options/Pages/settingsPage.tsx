@@ -14,6 +14,9 @@ import {
     Stack,
     Checkbox,
     FormControlLabel,
+    MenuItem,
+    Select,
+    SelectChangeEvent,
 } from "@mui/material";
 import { useStore } from "../store";
 import { exportAll, exportCovers, exportSettings, importFile } from "../utils/exportImport";
@@ -21,6 +24,7 @@ import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import DownloadIcon from "@mui/icons-material/Download";
 import { PAGE_ITEM_SX } from "../consts";
+import { LogLevel } from "../../global/types";
 
 export function SettingsPage() {
     const setting = useStore((state) => state.setting);
@@ -38,6 +42,11 @@ export function SettingsPage() {
 
     const toggleDarkMode = async () => {
         await setSetting({ darkMode: !setting.darkMode });
+    };
+
+    const handleLogLevelChange = async (event: SelectChangeEvent<LogLevel>) => {
+        const newLevel = event.target.value as LogLevel;
+        await setSetting({ logLevel: newLevel });
     };
 
     const handleExport = async () => {
@@ -108,6 +117,27 @@ export function SettingsPage() {
                                 checked={!!setting.darkMode}
                                 onChange={toggleDarkMode}
                             />
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                    <Divider component="li" />
+                    <ListItem>
+                        <ListItemText
+                            primary="Logging Level"
+                            secondary="Set the level of detail for system logs"
+                        />
+                        <ListItemSecondaryAction>
+                            <Select
+                                value={setting.logLevel || 'info'}
+                                onChange={handleLogLevelChange}
+                                size="small"
+                                sx={{ minWidth: 120 }}
+                            >
+                                <MenuItem value="debug">Debug</MenuItem>
+                                <MenuItem value="info">Info</MenuItem>
+                                <MenuItem value="warn">Warning</MenuItem>
+                                <MenuItem value="error">Error</MenuItem>
+                                <MenuItem value="none">None</MenuItem>
+                            </Select>
                         </ListItemSecondaryAction>
                     </ListItem>
                 </List>

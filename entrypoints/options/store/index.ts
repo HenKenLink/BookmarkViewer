@@ -393,7 +393,8 @@ export const useStore = create<Store>()((...action) => ({
     fetchDelayCount: 5,
     fetchDelayTimeMin: 1000,
     fetchDelayTimeMax: 3000,
-    enableDelay: true
+    enableDelay: true,
+    logLevel: 'info',
   } as Setting,
   bookmarkTree: null as BookmarkTreeNode | null,
   bookmarkList: [] as BookmarkTreeNode[],

@@ -1,3 +1,4 @@
+import { logger } from "../global/logger";
 import { messageId } from "../global/message";
 import { FetchTask, FetchConfig } from "../global/types";
 
@@ -38,7 +39,7 @@ async function saveThumb(thumb: Thumb): Promise<void> {
       [pageUrl]: uintBuf,
     });
   } catch (err) {
-    console.error(`[Background] Failed to download thumb from ${thumbUrl}`, err);
+    logger.error(`[Background] Failed to download thumb from ${thumbUrl}`, err);
   }
 }
 
@@ -47,6 +48,7 @@ async function saveThumb(thumb: Thumb): Promise<void> {
 async function simpleScriptExecutor(selector: string, type: string, attribute: string | null) {
   const getThumb = () => {
     const html = document.documentElement.outerHTML;
+    console.debug(`[open_simple] HTML Source:\n`, html.substring(0, 5000) + '...');
     let thumbUrl: string | null | undefined = null;
 
     if (type === "regex") {
@@ -127,14 +129,15 @@ async function fetchSimpleThumb(
   const thumbList: Thumb[] = [];
   for (const pageUrl of pageUrlList) {
     try {
-      console.log(`[Background] Fetching simple thumb from ${pageUrl} using ${type}`);
+      logger.info(`[Background] Fetching simple thumb from ${pageUrl} using ${type}`);
       const response = await fetch(pageUrl, {
         headers: {
           "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
         },
       });
       const html = await response.text();
+      logger.debug(`[simple] HTML Source for ${pageUrl}:\n`, html.substring(0, 5000) + '...');
       let thumbUrl: string | null | undefined = null;
 
       if (type === "regex") {
@@ -188,11 +191,11 @@ async function fetchSimpleThumb(
         // Resolve relative URLs
         thumbUrl = new URL(thumbUrl, pageUrl).toString();
       } else {
-        console.warn(`[Background] No suitable match found for selector on ${pageUrl}`);
+        logger.warn(`[Background] No suitable match found for selector on ${pageUrl}`);
       }
       thumbList.push({ pageUrl, thumbUrl: thumbUrl || "" });
     } catch (err) {
-      console.error(
+      logger.error(
         `[Background] Failed to fetch ${pageUrl} in simple mode`,
         err
       );
@@ -200,22 +203,6 @@ async function fetchSimpleThumb(
     }
   }
   return thumbList;
-}
-
-function dynamicExecutor(script: string, pageUrlList: string[]): Function {
-  try {
-    const func = new Function(
-      "pageUrlList",
-      `return (async () => {
-      ${script}
-    })();`
-    );
-    // @ts-ignore
-    return func(pageUrlList);
-  } catch (e) {
-    console.error("Error executing dynamic script:", e);
-    throw e;
-  }
 }
 
 // Flag and counters to control fetch and track progress
@@ -232,7 +219,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       abortController.abort();
       abortController = null;
     }
-    console.log("[Background] Fetch stop requested");
+    logger.info("[Background] Fetch stop requested");
     return;
   }
 
@@ -274,7 +261,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
           const tab = await browser.tabs.get(tabId);
           if (tab.id) return tab.id;
         } catch (e) {
-          console.log(`[Background] Tab ${tabId} lost, will create new one`);
+          logger.info(`[Background] Tab ${tabId} lost, will create new one`);
         }
       }
       const tab = await browser.tabs.create({ url: initialUrl, active: false });
@@ -287,96 +274,14 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       const config = task.config;
       const pageUrlList = task.items.map(item => item.pageUrl);
 
-      console.log(`[Background] Getting thumbnails for: ${config.hostname}`);
+      logger.info(`[Background] Getting thumbnails for: ${config.hostname}`);
 
-      const script = config.fetchScript;
-      const mode = config.mode || "inject";
       const selector = config.selector;
+      const mode = config.mode;
 
       let thumbList: Thumb[] = [];
 
-      if (mode === "inject" && script) {
-        let hostname = config.hostname;
-        // Normalize hostname: remove protocol if user incorrectly entered it
-        if (hostname.includes("://")) {
-          try {
-            hostname = new URL(hostname).hostname;
-          } catch (e) { }
-        }
-        const tabUrl = `https://${hostname}`;
-        let tabId: number | null = null;
-
-        console.log(`[Background] Using unified serial injection with MAIN world for ${hostname}`);
-
-        try {
-          // Initialize tab for this batch
-          tabId = await getOrCreateTab(null, tabUrl);
-          await waitForTabLoad(tabId, 30000, signal);
-
-
-          for (const pageUrl of pageUrlList) {
-            if (isFetchStopped) break;
-            try {
-              // Ensure tab is still valid before processing each item
-              tabId = await getOrCreateTab(tabId, tabUrl);
-              // If we had to recreate the tab, we might need to wait for load, 
-              // but getOrCreateTab with tabUrl starts loading.
-              // For inject mode, we generally want to stay on the main domain page 
-              // or just have a tab open to the domain.
-              // However, the original logic created the tab once. 
-              // If recreated, we should wait for load.
-              // We can check if tab status is complete via waitForTabLoad.
-              await waitForTabLoad(tabId, 30000, signal);
-
-              console.log(`[Background] Injecting script for ${pageUrl}`);
-
-              const res = await browser.scripting.executeScript({
-                target: { tabId },
-                func: dynamicExecutor,
-                args: [script, [pageUrl]],
-                world: "MAIN",
-              });
-
-              const executionResult = res?.[0]?.result;
-              const results = (executionResult as any)?.results || [];
-
-              console.log(`[Background] Got results for ${pageUrl}:`, results);
-
-              for (const thumb of results) {
-                await saveThumb(thumb);
-              }
-            } catch (err) {
-              console.error(`[Background] Script execution failed for ${pageUrl}`, err);
-            } finally {
-              try {
-                currentProgress++;
-                itemsFetchedInSession++;
-
-                browser.runtime.sendMessage({
-                  type: messageId.singleThumbFinished,
-                  pageUrl: pageUrl,
-                  progress: currentProgress,
-                  total: totalItems,
-                });
-
-                // Check for delay
-                if (enableDelay && fetchDelayCount > 0 && itemsFetchedInSession % fetchDelayCount === 0 && currentProgress < totalItems) {
-                  const randomDelay = Math.floor(Math.random() * (fetchDelayTimeMax - fetchDelayTimeMin + 1)) + fetchDelayTimeMin;
-                  console.log(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
-                  await delay(randomDelay);
-                }
-              } catch (e) {
-                console.error(`[Background] Error in finally block for ${pageUrl} (inject)`, e);
-              }
-            }
-          }
-        } finally {
-          if (tabId) {
-            try { await browser.tabs.remove(tabId); } catch (e) { }
-          }
-        }
-        continue;
-      } else if (mode === "open_simple" && selector) {
+      if (mode === "open_simple" && selector) {
         let tabId: number | null = null;
         const type = config.selectorType || "regex";
         const attribute = config.attribute;
@@ -406,11 +311,11 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
                 const thumb = { pageUrl, thumbUrl };
                 await saveThumb(thumb);
               } else {
-                console.warn(`[Background] No thumb found for ${pageUrl} in open_simple mode`);
+                logger.warn(`[Background] No thumb found for ${pageUrl} in open_simple mode`);
               }
 
             } catch (err) {
-              console.error(`[Background] Failed to process ${pageUrl} in open_simple mode`, err);
+              logger.error(`[Background] Failed to process ${pageUrl} in open_simple mode`, err);
               // If error allows, we might want to reset tabId if we suspect tab is dead,
               // but the next iteration check will handle 'tab not found' errors.
               // If 'waitForTabLoad' throws 'Tab ... was closed', we proceed to next item,
@@ -431,11 +336,11 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
                 // Check for delay
                 if (enableDelay && fetchDelayCount > 0 && itemsFetchedInSession % fetchDelayCount === 0 && currentProgress < totalItems) {
                   const randomDelay = Math.floor(Math.random() * (fetchDelayTimeMax - fetchDelayTimeMin + 1)) + fetchDelayTimeMin;
-                  console.log(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
+                  logger.info(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
                   await delay(randomDelay);
                 }
               } catch (e) {
-                console.error(`[Background] Error in finally block for ${pageUrl} (open_simple)`, e);
+                logger.error(`[Background] Error in finally block for ${pageUrl} (open_simple)`, e);
               }
             }
           }
@@ -479,11 +384,11 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
           // Check for delay
           if (enableDelay && fetchDelayCount > 0 && itemsFetchedInSession % fetchDelayCount === 0 && currentProgress < totalItems) {
             const randomDelay = Math.floor(Math.random() * (fetchDelayTimeMax - fetchDelayTimeMin + 1)) + fetchDelayTimeMin;
-            console.log(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
+            logger.info(`[Background] Delaying for ${randomDelay}ms after fetching ${itemsFetchedInSession} items`);
             await delay(randomDelay);
           }
         } catch (e) {
-          console.error(`[Background] Error in simple mode loop for ${thumb.pageUrl}`, e);
+          logger.error(`[Background] Error in simple mode loop for ${thumb.pageUrl}`, e);
         }
       }
     }
@@ -510,10 +415,10 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 
 export default defineBackground(() => {
   (async () => {
-    console.log(`[Background] Initializing. DEV: ${__DEV__}, CHROME: ${__CHROME__}`);
+    logger.info(`[Background] Initializing. DEV: ${__DEV__}, CHROME: ${__CHROME__}`);
 
     if (__DEV__) {
-      console.log("[Background] Running in DEV mode, adding test data...");
+      logger.info("[Background] Running in DEV mode, adding test data...");
       const { testStorageConfig, testAddBookmarks } = await import("../global/test");
       await testStorageConfig();
       await testAddBookmarks();
