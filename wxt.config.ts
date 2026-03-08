@@ -1,5 +1,14 @@
 import { defineConfig } from "wxt";
+import { EventEmitter } from "node:events";
 
+// Increase the limit to prevent MaxListenersExceededWarning from wxt's readline interface
+EventEmitter.defaultMaxListeners = 50;
+if (process.stdin && typeof process.stdin.setMaxListeners === "function") {
+  process.stdin.setMaxListeners(50);
+}
+if (process.stdout && typeof process.stdout.setMaxListeners === "function") {
+  process.stdout.setMaxListeners(50);
+}
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ["@wxt-dev/module-react"],

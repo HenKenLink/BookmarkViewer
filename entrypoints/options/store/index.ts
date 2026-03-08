@@ -80,6 +80,8 @@ type storeAction = {
   uploadThumbnail: (bookmarkId: string, file: File) => Promise<void>;
   downloadMultipleThumbnailsAction: (bookmarkIds: string[]) => Promise<void>;
   clearAllCovers: () => Promise<void>;
+  toggleFavoriteFolder: (id: string) => void;
+  setFavoriteFolderAlias: (id: string, alias: string) => void;
 };
 
 type Store = storeState & storeAction;
@@ -384,6 +386,28 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
     // 4. Clear memory state
     get().clearLoadedImageMap();
   },
+  toggleFavoriteFolder: (id: string) => {
+    const currentFavorites = get().setting.favoriteFolderIds || [];
+    const isFavorite = currentFavorites.includes(id);
+    let newFavorites;
+
+    if (isFavorite) {
+      newFavorites = currentFavorites.filter(folderId => folderId !== id);
+    } else {
+      newFavorites = [...currentFavorites, id];
+    }
+
+    get().setSetting({ favoriteFolderIds: newFavorites });
+  },
+  setFavoriteFolderAlias: (id: string, alias: string) => {
+    const currentAliases = get().setting.favoriteFolderAliases || {};
+    get().setSetting({
+      favoriteFolderAliases: {
+        ...currentAliases,
+        [id]: alias,
+      }
+    });
+  },
 });
 
 export const useStore = create<Store>()((...action) => ({
@@ -395,7 +419,13 @@ export const useStore = create<Store>()((...action) => ({
     fetchDelayTimeMax: 3000,
     enableDelay: true,
     logLevel: 'info',
-  } as Setting,
+    favoriteFolderIds: [],
+    showFavoriteFolders: true,
+    favoriteFolderAliases: {},
+    sidebarOpen: true,
+    selectedFolderId: "all",
+    expandedFolderIds: [],
+  } as unknown as Setting,
   bookmarkTree: null as BookmarkTreeNode | null,
   bookmarkList: [] as BookmarkTreeNode[],
   bookmarkMap: {} as BookmarkMap,

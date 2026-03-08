@@ -44,6 +44,10 @@ export function SettingsPage() {
         await setSetting({ darkMode: !setting.darkMode });
     };
 
+    const toggleShowFavoriteFolders = async () => {
+        await setSetting({ showFavoriteFolders: !setting.showFavoriteFolders });
+    };
+
     const handleLogLevelChange = async (event: SelectChangeEvent<LogLevel>) => {
         const newLevel = event.target.value as LogLevel;
         await setSetting({ logLevel: newLevel });
@@ -138,6 +142,20 @@ export function SettingsPage() {
                                 <MenuItem value="error">Error</MenuItem>
                                 <MenuItem value="none">None</MenuItem>
                             </Select>
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                    <Divider component="li" />
+                    <ListItem>
+                        <ListItemText
+                            primary="Show Favorite Folders Tag Bar"
+                            secondary="Display a quick-access tag bar for favorite folders in the viewer"
+                        />
+                        <ListItemSecondaryAction>
+                            <Switch
+                                edge="end"
+                                checked={!!setting.showFavoriteFolders}
+                                onChange={toggleShowFavoriteFolders}
+                            />
                         </ListItemSecondaryAction>
                     </ListItem>
                 </List>

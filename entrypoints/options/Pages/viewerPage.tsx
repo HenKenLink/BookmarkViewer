@@ -25,6 +25,10 @@ import { SelectionActionBar } from "../Components/SelectionActionBar";
 import { NavBar } from "../Components/NavBar";
 import LaunchIcon from "@mui/icons-material/Launch";
 import ChecklistIcon from "@mui/icons-material/Checklist";
+import StarIcon from "@mui/icons-material/Star";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import React, { useRef } from "react";
 
 async function startGetThumb(fetchTaskList: FetchTask[]): Promise<void> {
   if (fetchTaskList.length > 0) {
@@ -53,6 +57,81 @@ function FetchProgress({ isFetching, progress, total, onStop }: { isFetching: bo
       >
         Stop
       </Button>
+    </Box>
+  );
+}
+
+function FavoriteFoldersBar({ favoriteFolderIds, bookmarkMap, selectedFolderId, onSelect, aliases }: { favoriteFolderIds: string[], bookmarkMap: Record<string, BookmarkTreeNode>, selectedFolderId: string, onSelect: (id: string) => void, aliases: Record<string, string> }) {
+  const [expanded, setExpanded] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [isOverflowing, setIsOverflowing] = useState(false);
+
+  useEffect(() => {
+    // Check if the container is overflowing
+    if (containerRef.current) {
+      const isOverflow = containerRef.current.scrollWidth > containerRef.current.clientWidth;
+      setIsOverflowing(isOverflow || expanded);
+    }
+  }, [favoriteFolderIds, expanded]);
+
+  if (favoriteFolderIds.length === 0) return null;
+
+  return (
+    <Box sx={{ mb: 2, display: 'flex', alignItems: 'flex-start', gap: 1, px: 1 }}>
+      <Box
+        ref={containerRef}
+        sx={{
+          display: 'flex',
+          flexWrap: expanded ? 'wrap' : 'nowrap',
+          overflowX: expanded ? 'visible' : 'auto',
+          overflowY: expanded ? 'visible' : 'hidden',
+          gap: 1,
+          flexGrow: 1,
+          minWidth: 0, // Keeps flex item from ignoring container constraints
+          height: expanded ? 'auto' : 32, // Fixed height for one line
+          scrollbarWidth: 'none', // Firefox
+          '&::-webkit-scrollbar': {
+            display: 'none', // Chrome/Safari
+          },
+          WebkitMaskImage: (!expanded && isOverflowing) ? 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)' : 'none',
+          maskImage: (!expanded && isOverflowing) ? 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)' : 'none',
+        }}
+      >
+        {favoriteFolderIds.map(id => {
+          const folder = bookmarkMap[id];
+          if (!folder) return null;
+          return (
+            <Chip
+              key={`tag-${id}`}
+              icon={<StarIcon fontSize="small" sx={{ color: selectedFolderId === id ? "white !important" : "warning.main" }} />}
+              label={aliases[id] ? aliases[id] : folder.title || "Untitled"}
+              onClick={() => onSelect(id)}
+              color={selectedFolderId === id ? "warning" : "default"}
+              sx={{
+                fontWeight: selectedFolderId === id ? 600 : 400,
+                flexShrink: 0,
+                transition: "all 0.2s ease",
+                "&:last-of-type": {
+                  marginRight: '24px' // Ensures it can be scrolled fully clear of the fading mask
+                },
+                "&:hover": {
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                }
+              }}
+            />
+          );
+        })}
+      </Box>
+      {isOverflowing && (
+        <IconButton
+          size="small"
+          onClick={() => setExpanded(!expanded)}
+          sx={{ flexShrink: 0, mt: -0.5 }}
+          title={expanded ? "Show less" : "Show more"}
+        >
+          {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+        </IconButton>
+      )}
     </Box>
   );
 }
@@ -88,6 +167,7 @@ export function ViewerPage() {
   const setLoadingBookmarks = useStore((state) => state.setLoadingBookmarks);
   const isSelectionMode = useStore((state) => state.isSelectionMode);
   const setIsSelectionMode = useStore((state) => state.setIsSelectionMode);
+  const setting = useStore((state) => state.setting);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -471,6 +551,16 @@ export function ViewerPage() {
             }}
           />
         </Box>
+
+        {setting.showFavoriteFolders && (
+          <FavoriteFoldersBar
+            favoriteFolderIds={setting.favoriteFolderIds || []}
+            bookmarkMap={bookmarkMap}
+            selectedFolderId={selectedFolderId}
+            onSelect={setSelectedFolderId}
+            aliases={setting.favoriteFolderAliases || {}}
+          />
+        )}
 
         <Box sx={{ pb: 8 }}>
           {isLoadingBookmarks && (

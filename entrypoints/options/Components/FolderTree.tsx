@@ -7,6 +7,10 @@ import {
     Collapse,
     Box,
     alpha,
+    Typography,
+    Menu,
+    MenuItem,
+    Divider,
 } from "@mui/material";
 import FolderIcon from "@mui/icons-material/Folder";
 import FolderOpenIcon from "@mui/icons-material/FolderOpen";
@@ -14,8 +18,12 @@ import ExpandLess from "@mui/icons-material/ExpandLess";
 import ExpandMore from "@mui/icons-material/ExpandMore";
 import AllInclusiveIcon from "@mui/icons-material/AllInclusive";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import EditIcon from "@mui/icons-material/Edit";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import DownloadIcon from "@mui/icons-material/Download";
 import RefreshIcon from "@mui/icons-material/Refresh";
+import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
 import { BookmarkTreeNode } from "../../global/types";
 import { useStore } from "../store";
 import { ContextMenu, ContextMenuItem } from "./ContextMenu";
@@ -40,6 +48,10 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
     const setSelectedFolderId = useStore((state) => state.setSelectedFolderId);
     const getAllBookmarksInFolderAction = useStore((state) => state.getAllBookmarksInFolderAction);
     const forceFetchThumbnails = useStore((state) => state.forceFetchThumbnails);
+    const setting = useStore((state) => state.setting);
+    const toggleFavoriteFolder = useStore((state) => state.toggleFavoriteFolder);
+
+    const isFavorite = (setting.favoriteFolderIds || []).includes(node.id);
 
     const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number } | null>(null);
 
@@ -85,6 +97,10 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
         }
     };
 
+    const handleToggleFavorite = () => {
+        toggleFavoriteFolder(node.id);
+    };
+
     const contextMenuItems: ContextMenuItem[] = [
         {
             label: "Show bookmarks",
@@ -101,6 +117,12 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
             label: "Force fetch thumbs",
             icon: <RefreshIcon fontSize="small" />,
             onClick: handleForceFetchThumbs,
+        },
+        {
+            label: isFavorite ? "Remove from Favorites" : "Add to Favorites",
+            icon: isFavorite ? <StarIcon fontSize="small" sx={{ color: "warning.main" }} /> : <StarBorderIcon fontSize="small" />,
+            onClick: handleToggleFavorite,
+            divider: true,
         },
     ];
 
@@ -199,6 +221,64 @@ export const FolderTree: React.FC<FolderTreeProps> = () => {
     const setSelectedFolderId = useStore((state) => state.setSelectedFolderId);
     const expandedFolderIds = useStore((state) => state.expandedFolderIds);
     const setExpandedFolderIds = useStore((state) => state.setExpandedFolderIds);
+    const setting = useStore((state) => state.setting);
+    const bookmarkMap = useStore((state) => state.bookmarkMap);
+
+    const favoriteFolderIds = setting.favoriteFolderIds || [];
+    const favoriteFolderAliases = setting.favoriteFolderAliases || {};
+
+    const [favoritesExpanded, setFavoritesExpanded] = useState(true);
+
+    const [favContextMenu, setFavContextMenu] = useState<{
+        mouseX: number;
+        mouseY: number;
+        folderId: string;
+    } | null>(null);
+
+    const handleFavContextMenu = (event: React.MouseEvent, id: string) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setFavContextMenu(
+            favContextMenu === null
+                ? {
+                    mouseX: event.clientX + 2,
+                    mouseY: event.clientY - 6,
+                    folderId: id,
+                }
+                : null,
+        );
+    };
+
+    const handleFavContextMenuClose = () => {
+        setFavContextMenu(null);
+    };
+
+    const handleFavRename = () => {
+        if (!favContextMenu) return;
+        const id = favContextMenu.folderId;
+        const folder = bookmarkMap[id];
+        if (!folder) return;
+
+        const currentAlias = favoriteFolderAliases[id] || folder.title || "";
+        const newAlias = window.prompt("Enter a new alias for this favorite (leave blank to reset):", currentAlias);
+
+        if (newAlias !== null) {
+            useStore.getState().setFavoriteFolderAlias(id, newAlias.trim());
+        }
+        handleFavContextMenuClose();
+    };
+
+    const handleFavRemove = () => {
+        if (!favContextMenu) return;
+        useStore.getState().toggleFavoriteFolder(favContextMenu.folderId);
+        handleFavContextMenuClose();
+    };
+
+    const handleFavShowBookmarks = () => {
+        if (!favContextMenu) return;
+        setSelectedFolderId(favContextMenu.folderId);
+        handleFavContextMenuClose();
+    };
 
     const expandedIdsSet = useMemo(() => new Set(expandedFolderIds), [expandedFolderIds]);
 
@@ -319,6 +399,95 @@ export const FolderTree: React.FC<FolderTreeProps> = () => {
                 />
             </ListItemButton>
 
+            {favoriteFolderIds.length > 0 && (
+                <Box sx={{ mb: 2 }}>
+                    <ListItemButton
+                        onClick={() => setFavoritesExpanded(!favoritesExpanded)}
+                        sx={{
+                            px: 2,
+                            py: 0.5,
+                            "&:hover": { backgroundColor: "transparent" }
+                        }}
+                    >
+                        <Typography
+                            variant="overline"
+                            sx={{ color: "text.secondary", fontWeight: 600, display: "block", flexGrow: 1 }}
+                        >
+                            FAVORITES
+                        </Typography>
+                        {favoritesExpanded ? <ExpandLess fontSize="small" sx={{ color: "text.secondary" }} /> : <ExpandMore fontSize="small" sx={{ color: "text.secondary" }} />}
+                    </ListItemButton>
+                    <Collapse in={favoritesExpanded} timeout="auto" unmountOnExit>
+                        <List component="div" disablePadding>
+                            {favoriteFolderIds.map((id) => {
+                                const folder = bookmarkMap[id];
+                                if (!folder) return null;
+                                const displayName = favoriteFolderAliases[id] || folder.title || "Untitled Folder";
+                                return (
+                                    <ListItemButton
+                                        key={`fav-${id}`}
+                                        selected={selectedFolderId === id}
+                                        onClick={() => setSelectedFolderId(id)}
+                                        onContextMenu={(e) => handleFavContextMenu(e, id)}
+                                        sx={{
+                                            py: 1,
+                                            borderRadius: 2,
+                                            mb: 0.5,
+                                            transition: "all 0.2s ease",
+                                            "&:hover": {
+                                                backgroundColor: (theme) => alpha(theme.palette.warning.main, theme.palette.mode === 'light' ? 0.08 : 0.15),
+                                                transform: "translateX(4px)",
+                                                "& .MuiListItemIcon-root": {
+                                                    color: "warning.main",
+                                                }
+                                            },
+                                            "&.Mui-selected": {
+                                                backgroundColor: (theme) => theme.palette.mode === 'light'
+                                                    ? "warning.main"
+                                                    : "warning.dark",
+                                                color: "white",
+                                                fontWeight: 600,
+                                                boxShadow: "0 2px 8px rgba(237, 108, 2, 0.3)",
+                                                "&:hover": {
+                                                    backgroundColor: (theme) => theme.palette.mode === 'light'
+                                                        ? "warning.dark"
+                                                        : "warning.main",
+                                                },
+                                                "& .MuiListItemIcon-root": {
+                                                    color: "white",
+                                                },
+                                                "& .MuiListItemText-primary": {
+                                                    color: "white",
+                                                }
+                                            }
+                                        }}
+                                    >
+                                        <ListItemIcon sx={{ minWidth: 32, color: "warning.main" }}>
+                                            <StarIcon fontSize="small" />
+                                        </ListItemIcon>
+                                        <ListItemText
+                                            primary={displayName}
+                                            primaryTypographyProps={{
+                                                variant: "body2",
+                                                fontWeight: selectedFolderId === id ? 600 : 500,
+                                                noWrap: true
+                                            }}
+                                        />
+                                    </ListItemButton>
+                                );
+                            })}
+                        </List>
+                    </Collapse>
+                </Box>
+            )}
+
+            <Typography
+                variant="overline"
+                sx={{ px: 2, color: "text.secondary", fontWeight: 600, display: "block", mb: 0.5 }}
+            >
+                FOLDERS
+            </Typography>
+
             {filteredTree && filteredTree.children && filteredTree.children
                 .filter((child: BookmarkTreeNode) => !child.url)
                 .map((child: BookmarkTreeNode) => (
@@ -332,6 +501,46 @@ export const FolderTree: React.FC<FolderTreeProps> = () => {
                         onToggle={handleToggle}
                     />
                 ))}
+
+            <Menu
+                open={favContextMenu !== null}
+                onClose={handleFavContextMenuClose}
+                anchorReference="anchorPosition"
+                anchorPosition={
+                    favContextMenu !== null
+                        ? { top: favContextMenu.mouseY, left: favContextMenu.mouseX }
+                        : undefined
+                }
+                PaperProps={{
+                    sx: {
+                        borderRadius: 2,
+                        minWidth: 160,
+                        boxShadow: "0 8px 16px rgba(0,0,0,0.1)",
+                        "& .MuiMenuItem-root": {
+                            px: 2,
+                            py: 1.5,
+                            gap: 1.5,
+                            "& .MuiListItemIcon-root": {
+                                minWidth: 24,
+                            }
+                        }
+                    }
+                }}
+            >
+                <MenuItem onClick={handleFavShowBookmarks}>
+                    <ListItemIcon><VisibilityIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Show Bookmarks" primaryTypographyProps={{ variant: "body2", fontWeight: 500 }} />
+                </MenuItem>
+                <MenuItem onClick={handleFavRename}>
+                    <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Edit Alias" primaryTypographyProps={{ variant: "body2", fontWeight: 500 }} />
+                </MenuItem>
+                <Divider sx={{ my: 0.5 }} />
+                <MenuItem onClick={handleFavRemove} sx={{ color: "error.main", "& .MuiListItemIcon-root": { color: "error.main" } }}>
+                    <ListItemIcon><DeleteOutlineIcon fontSize="small" /></ListItemIcon>
+                    <ListItemText primary="Remove from Favorites" primaryTypographyProps={{ variant: "body2", fontWeight: 500 }} />
+                </MenuItem>
+            </Menu>
         </List>
     );
 };

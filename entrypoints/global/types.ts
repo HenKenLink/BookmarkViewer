@@ -53,4 +53,7 @@ export type Setting = {
   fetchDelayTimeMax: number;
   enableDelay: boolean;
   logLevel: LogLevel;
+  favoriteFolderIds: string[];
+  showFavoriteFolders: boolean;
+  favoriteFolderAliases: Record<string, string>;
 };
