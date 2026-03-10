@@ -247,7 +247,7 @@ export function SettingsPage() {
                         <ListItemSecondaryAction>
                             <TextField
                                 type="number"
-                                value={setting.videoFetchChunkSize || 1.5}
+                                value={setting.videoFetchChunkSize ?? 1.5}
                                 onChange={(e) => setSetting({ videoFetchChunkSize: Number(e.target.value) })}
                                 size="small"
                                 inputProps={{ min: 0.1, step: 0.1 }}
@@ -264,7 +264,7 @@ export function SettingsPage() {
                         <ListItemSecondaryAction>
                             <TextField
                                 type="number"
-                                value={setting.videoFetchMaxRetries || 3}
+                                value={setting.videoFetchMaxRetries ?? 3}
                                 onChange={(e) => setSetting({ videoFetchMaxRetries: Number(e.target.value) })}
                                 size="small"
                                 inputProps={{ min: 0 }}

@@ -180,7 +180,12 @@ export function ViewerPage() {
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
   const startMatchBookmarks = async () => {
-    setLoadingBookmarks(true);
+    // Only show full loading spinner if we don't have any bookmarks yet
+    // This prevents scroll position loss on background refreshes
+    const hasItems = useStore.getState().matchedBookmarks.length > 0;
+    if (!hasItems) {
+      setLoadingBookmarks(true);
+    }
     try {
       await matchBookmarks();
     } finally {
@@ -217,7 +222,8 @@ export function ViewerPage() {
     switch (message.type) {
       case messageId.getThumbfinished:
         setFetchStatus(false);
-        startMatchBookmarks();
+        // Removed startMatchBookmarks() to prevent full page re-render
+        // Thumbnails are updated in real-time via singleThumbFinished
         break;
       case messageId.fetchStarted:
         setFetchStatus(true, message.total);

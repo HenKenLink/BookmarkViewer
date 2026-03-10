@@ -28,7 +28,7 @@ const openUI = async () => {
   }
 };
 
-async function saveThumb(thumb: Thumb): Promise<void> {
+async function saveThumb(thumb: Thumb): Promise<boolean> {
   const thumbUrl = thumb.thumbUrl;
   const pageUrl = thumb.pageUrl;
   try {
@@ -46,8 +46,10 @@ async function saveThumb(thumb: Thumb): Promise<void> {
     await browser.storage.local.set({
       [pageUrl]: uintBuf,
     });
+    return true;
   } catch (err) {
     logger.error(`[Background] Failed to download thumb from ${thumbUrl}`, err);
+    return false;
   }
 }
 
@@ -113,23 +115,24 @@ async function pageScriptExecutor(selector: string, type: string, attribute: str
     return null;
   };
 
-  // // Poll for up to 10 seconds
-  // const startTime = Date.now();
-  // while (Date.now() - startTime < 10000) {
-  //   const thumbUrl = getThumb();
-  //   if (thumbUrl) return thumbUrl;
-  //   // Wait 500ms
-  //   await new Promise(resolve => setTimeout(resolve, 500));
-  // }
+  // Poll for up to 10 seconds
+  const startTime = Date.now();
+  const timeout = 10000;
+  
+  while (Date.now() - startTime < timeout) {
+    const thumbUrl = getThumb();
+    if (thumbUrl) return thumbUrl;
+    
+    // Wait 500ms
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
 
-  const thumbUrl = getThumb();
-  if (thumbUrl) return thumbUrl;
-
-  return null;
+  // Final attempt
+  return getThumb();
 }
 
 
-async function fetchVideoAsDataUrl(videoUrl: string, startByte: number, endByte: number): Promise<string | null> {
+async function fetchVideoChunk(videoUrl: string, startByte: number, endByte: number): Promise<Blob | null> {
   try {
     const res = await fetch(videoUrl, {
       headers: {
@@ -140,34 +143,86 @@ async function fetchVideoAsDataUrl(videoUrl: string, startByte: number, endByte:
     
     // Check if the response is successful (200 or 206 Partial Content)
     if (!res.ok) {
-       logger.error(`[Background] Failed to fetch video, status: ${res.status}`);
+       logger.error(`[Background] Failed to fetch video chunk, status: ${res.status}`);
        return null;
     }
 
-    const blob = await res.blob();
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-       const reader = new FileReader();
-       reader.onloadend = () => resolve(reader.result as string);
-       reader.onerror = reject;
-       reader.readAsDataURL(blob);
-    });
-    return dataUrl;
+    return await res.blob();
   } catch(e) {
-    logger.error("[Background] Error fetching partial video", e);
+    logger.error("[Background] Error fetching video chunk", e);
     return null;
   }
 }
 
-function videoDataUrlFrameExtractor(dataUrl: string): Promise<string | null> {
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// 探测 MP4 文件的元数据结束位置
+async function detectMp4MetadataEnd(videoUrl: string): Promise<number | null> {
+  try {
+    // 先取前 128KB 探测结构
+    const res = await fetch(videoUrl, { 
+      headers: { 
+        "Range": "bytes=0-131071",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+      } 
+    });
+    if (!res.ok) return null;
+    const buffer = await res.arrayBuffer();
+    const view = new DataView(buffer);
+    
+    let offset = 0;
+    while (offset < view.byteLength - 8) {
+      const size = view.getUint32(offset);
+      const type = String.fromCharCode(
+        view.getUint8(offset + 4),
+        view.getUint8(offset + 5),
+        view.getUint8(offset + 6),
+        view.getUint8(offset + 7)
+      );
+      
+      // 如果找到了 moov，说明元数据到此结束
+      if (type === 'moov') {
+        logger.info(`[Background] Detected 'moov' atom at offset ${offset}, size ${size}. Total metadata: ${offset + size} bytes.`);
+        return offset + size;
+      }
+      
+      if (size <= 0 || size > 100 * 1024 * 1024) break; // 防止死循环或异常大小
+      offset += size;
+    }
+  } catch (e) {
+    logger.warn("[Background] Failed to detect MP4 metadata size", e);
+  }
+  return null;
+}
+
+async function videoDataUrlFrameExtractor(dataUrl: string): Promise<string | null> {
   return new Promise<string | null>((resolve) => {
+    // Some browsers may throttle video decoding in background or if not in DOM
     const video = document.createElement('video');
     video.muted = true;
     video.playsInline = true;
     video.autoplay = false;
     
+    // Style to ensure it's "visible" but not intrusive
+    video.style.position = 'fixed';
+    video.style.top = '0';
+    video.style.left = '0';
+    video.style.width = '1px';
+    video.style.height = '1px';
+    video.style.opacity = '0.01';
+    video.style.pointerEvents = 'none';
+    video.style.zIndex = '-9999';
+    
     // Set a timeout to avoid hanging indefinitely
     const timeoutId = setTimeout(() => {
-      console.warn("[page] Video frame capture from DataURL timed out");
+      console.warn("[page] Video frame capture from DataURL timed out after 15s");
       cleanup();
       resolve(null);
     }, 15000);
@@ -176,20 +231,33 @@ function videoDataUrlFrameExtractor(dataUrl: string): Promise<string | null> {
       clearTimeout(timeoutId);
       video.onloadeddata = null;
       video.onerror = null;
-      video.removeAttribute('src');
-      video.load();
+      video.oncanplay = null;
+      try {
+        video.pause();
+        video.removeAttribute('src');
+        video.load();
+        video.remove();
+      } catch (e) {
+        console.error("[page] Error during cleanup", e);
+      }
     };
 
     const captureFrame = () => {
+      console.log("[page] Video ready for capture, readyState:", video.readyState);
       try {
         const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth || 640;
-        canvas.height = video.videoHeight || 360;
+        // Ensure we have some dimensions
+        const width = video.videoWidth || 640;
+        const height = video.videoHeight || 360;
+        canvas.width = width;
+        canvas.height = height;
+        
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error("Could not get 2d context");
         
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        ctx.drawImage(video, 0, 0, width, height);
         const resultUrl = canvas.toDataURL('image/jpeg', 0.9);
+        console.log("[page] Successfully captured frame, DataURL length:", resultUrl.length);
         cleanup();
         resolve(resultUrl);
       } catch (error) {
@@ -200,11 +268,16 @@ function videoDataUrlFrameExtractor(dataUrl: string): Promise<string | null> {
     };
 
     video.onloadeddata = () => {
-      // readyState 2: HAVE_CURRENT_DATA (first frame available)
+      console.log("[page] onloadeddata fired, readyState:", video.readyState);
       if (video.readyState >= 2) {
         captureFrame();
-      } else {
-        video.addEventListener('canplay', captureFrame, { once: true });
+      }
+    };
+
+    video.oncanplay = () => {
+      console.log("[page] oncanplay fired, readyState:", video.readyState);
+      if (video.readyState >= 2) {
+        captureFrame();
       }
     };
 
@@ -216,6 +289,7 @@ function videoDataUrlFrameExtractor(dataUrl: string): Promise<string | null> {
     
     video.src = dataUrl;
     video.load();
+    document.body.appendChild(video); // Some browsers need the element in the DOM to load correctly
   });
 }
 
@@ -295,6 +369,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       totalItems += task.items.length;
     }
     currentProgress = 0;
+    let successCount = 0;
 
     if (totalItems === 0) {
       logger.info("[Background] All items already have thumbnails, skipping fetch");
@@ -343,6 +418,8 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       const attribute = config.attribute;
 
       try {
+        // Activate the tab to prevent background throttling for video decoding
+        await browser.tabs.update(tabId, { active: true });
         await browser.tabs.update(tabId, { url: pageUrl });
         await waitForTabLoad(tabId, 30000, signal);
 
@@ -357,18 +434,43 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         let finalThumbUrl: string | null | undefined = null;
 
         if (targetUrl) {
+          logger.info(`[Background] Target URL found: ${targetUrl} (Type: ${config.resultType})`);
           if (config.resultType === "video_url") {
-            const chunkSizeMB = settings.videoFetchChunkSize || 1.5;
-            const maxRetries = settings.videoFetchMaxRetries || 3;
+            const chunkSizeMB = settings?.videoFetchChunkSize ?? 1.5;
+            const maxRetries = settings?.videoFetchMaxRetries ?? 3;
+            const totalAttempts = maxRetries + 1;
             const chunkSizeBytes = Math.floor(chunkSizeMB * 1024 * 1024);
+            const fetchedChunks: Blob[] = [];
+            
+            // 尝试探测元数据大小
+            const metadataEnd = await detectMp4MetadataEnd(targetUrl);
+            let bytesFetched = 0;
 
-            for (let i = 0; i <= maxRetries; i++) {
-              const currentEndByte = (i + 1) * chunkSizeBytes;
-              logger.info(`[Background] Attempt ${i + 1} to fetch video frame for ${pageUrl} (Range: 0-${currentEndByte})`);
-              const videoDataUrl = await fetchVideoAsDataUrl(targetUrl, 0, currentEndByte);
+            for (let i = 0; i < totalAttempts; i++) {
+              let start = bytesFetched;
+              let end = (i + 1) * chunkSizeBytes - 1;
               
-              if (videoDataUrl) {
-                logger.info(`[Background] Video buffered to memory -> starting ISOLATED frame extraction...`);
+              // 如果探测到了元数据且第一次请求太小，直接扩充到元数据末尾+一点冗余
+              if (i === 0 && metadataEnd && end < metadataEnd + 256 * 1024) {
+                 end = metadataEnd + 256 * 1024; // 元数据 + 256KB 初始缓冲
+                 logger.info(`[Background] Smart Initial Fetch: Metadata ends at ${metadataEnd}, requesting up to ${end}`);
+              } else if (start > end) {
+                 // 如果探测扩充后，下一次循环的 end 还没赶上，则平移到探测末尾开始
+                 end = start + chunkSizeBytes - 1;
+              }
+
+              logger.info(`[Background] Attempt ${i + 1}/${totalAttempts} to fetch video chunk for ${pageUrl} (Range: ${start}-${end})`);
+              
+              const chunk = await fetchVideoChunk(targetUrl, start, end);
+              
+              if (chunk) {
+                fetchedChunks.push(chunk);
+                bytesFetched = end + 1; // 更新已获取的字节边界
+                
+                const combinedBlob = new Blob(fetchedChunks);
+                const videoDataUrl = await blobToDataUrl(combinedBlob);
+
+                logger.info(`[Background] Video buffered to memory (Total size: ${combinedBlob.size} bytes) -> starting ISOLATED frame extraction...`);
                 const frameRes = await browser.scripting.executeScript({
                   target: { tabId },
                   func: videoDataUrlFrameExtractor,
@@ -382,10 +484,10 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
                 }
               }
               
-              if (i < maxRetries) {
+              if (i < totalAttempts - 1) {
                 logger.warn(`[Background] Frame extraction failed on attempt ${i + 1}, retrying with larger range...`);
               } else {
-                logger.error(`[Background] Frame extraction failed after all ${maxRetries + 1} attempts`);
+                logger.error(`[Background] Frame extraction failed after all ${totalAttempts} attempts`);
               }
             }
           } else {
@@ -394,7 +496,8 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
         }
 
         if (finalThumbUrl) {
-          await saveThumb({ pageUrl, thumbUrl: finalThumbUrl });
+          const success = await saveThumb({ pageUrl, thumbUrl: finalThumbUrl });
+          if (success) successCount++;
         } else {
           logger.warn(`[Background] No thumb found for ${pageUrl} in page mode`);
         }
@@ -479,7 +582,8 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 
         if (thumbUrl) {
           thumbUrl = new URL(thumbUrl, pageUrl).toString();
-          await saveThumb({ pageUrl, thumbUrl });
+          const success = await saveThumb({ pageUrl, thumbUrl });
+          if (success) successCount++;
         } else {
           logger.warn(`[Background] No suitable match found for selector on ${pageUrl}`);
         }
@@ -576,11 +680,21 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
       });
     } else {
       browser.runtime.sendMessage({ type: messageId.getThumbfinished });
+      
+      let statusMsg = "";
+      if (successCount === totalItems) {
+        statusMsg = `获取完成！共成功获取了 ${successCount} 个封面。`;
+      } else if (successCount === 0) {
+        statusMsg = `获取失败！无法获取所选的 ${totalItems} 个书签封面。`;
+      } else {
+        statusMsg = `获取结束。成功: ${successCount}，失败: ${totalItems - successCount}。`;
+      }
+
       browser.notifications.create({
         type: "basic",
         iconUrl: "/icon/128.png",
-        title: "Bookmark Viewer",
-        message: `获取完成！共获取了 ${totalItems} 个书签封面。`,
+        title: successCount > 0 ? "获取成功" : "获取失败",
+        message: statusMsg,
       });
     }
   }

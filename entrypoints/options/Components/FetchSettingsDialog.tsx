@@ -33,8 +33,8 @@ export function FetchSettingsDialog({ open, onClose }: FetchSettingsDialogProps)
     const [delayTimeMin, setDelayTimeMin] = useState<number>(setting.fetchDelayTimeMin || 1000);
     const [delayTimeMax, setDelayTimeMax] = useState<number>(setting.fetchDelayTimeMax || 3000);
     const [keepTabsOpen, setKeepTabsOpen] = useState<boolean>(setting.keepTabsOpen || false);
-    const [videoFetchChunkSize, setVideoFetchChunkSize] = useState<number>(setting.videoFetchChunkSize || 1.5);
-    const [videoFetchMaxRetries, setVideoFetchMaxRetries] = useState<number>(setting.videoFetchMaxRetries || 3);
+    const [videoFetchChunkSize, setVideoFetchChunkSize] = useState<number>(setting.videoFetchChunkSize ?? 1.5);
+    const [videoFetchMaxRetries, setVideoFetchMaxRetries] = useState<number>(setting.videoFetchMaxRetries ?? 3);
 
     useEffect(() => {
         if (open) {
@@ -45,8 +45,8 @@ export function FetchSettingsDialog({ open, onClose }: FetchSettingsDialogProps)
             setDelayTimeMin(setting.fetchDelayTimeMin || 1000);
             setDelayTimeMax(setting.fetchDelayTimeMax || 3000);
             setKeepTabsOpen(setting.keepTabsOpen || false);
-            setVideoFetchChunkSize(setting.videoFetchChunkSize || 1.5);
-            setVideoFetchMaxRetries(setting.videoFetchMaxRetries || 3);
+            setVideoFetchChunkSize(setting.videoFetchChunkSize ?? 1.5);
+            setVideoFetchMaxRetries(setting.videoFetchMaxRetries ?? 3);
         }
     }, [open, setting]);
 
