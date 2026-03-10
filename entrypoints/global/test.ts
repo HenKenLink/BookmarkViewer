@@ -33,6 +33,10 @@ const testBookmarkList: CreateDetails[] = [
     title: "Hairy Daddy Fucks Slut",
     url: "https://www.boyfriendtv.com/es/videos/1580766/hairy-daddy-fucks-slut/?tag=anal%20big%20cock%20blowjob%20gay%20sex%20studs%20black%20daddy",
   },
+  {
+    title: "Zayn Dom gets jerked off",
+    url: "https://justthegays.com/video/28701-zayn-dom-gets-jerked-off2-022619/",
+  },
 ];
 
 // https://www.boyfriendtv.com/es/videos/1301842/bottom-takes-a-monstercock-in-her-big-ass/
@@ -63,7 +67,7 @@ export const testFetchConfList: FetchConfig[] = [
       "^https:\\/\\/www\\.boyfriendtv\\.com(?:\\/es)?\\/videos\\/.+",
     selector: '"thumbnailUrl":\\["([^"]+)"',
     selectorType: 'regex',
-    mode: "simple",
+    mode: "fast",
   },
   {
     id: 2,
@@ -71,7 +75,7 @@ export const testFetchConfList: FetchConfig[] = [
     hostname: "www.igayvideos.tv",
     regexPattern: "^https:\\/\\/www\\.igayvideos\\.tv\\/.+",
     selector: 'poster="(.*?)"',
-    mode: "simple",
+    mode: "fast",
   },
   {
     id: 3,
@@ -79,7 +83,7 @@ export const testFetchConfList: FetchConfig[] = [
     hostname: "justthegays.tv",
     regexPattern: "^https:\\/\\/justthegays\\.tv\\/video\\/.+",
     selector: '"thumbnailUrl":"(.*?)"',
-    mode: "simple",
+    mode: "fast",
   },
   {
     id: 4,
@@ -87,7 +91,7 @@ export const testFetchConfList: FetchConfig[] = [
     hostname: "gayforfans.com",
     regexPattern: "^https:\\/\\/gayforfans\\.com\\/video\\/.+",
     selector: 'poster="(.*?)"',
-    mode: "simple",
+    mode: "fast",
   },
   {
     id: 5,
@@ -95,7 +99,19 @@ export const testFetchConfList: FetchConfig[] = [
     hostname: "https://thegay.com/",
     regexPattern: "^https:\\/\\/thegay.com\\/videos\\/.+",
     selector: '"thumbnailUrl":"(.*?)"',
-    mode: "open_simple",
+    mode: "page",
+    resultType: "cover_url",
+  },
+  {
+    id: 6,
+    name: "JustTheGays fetch Video Thumbnail",
+    hostname: "justthegays.com",
+    regexPattern: "^https:\\/\\/justthegays\\.com\\/video\\/.+",
+    selector: "video.easy-video-player source",
+    selectorType: "css",
+    attribute: "src",
+    mode: "page",
+    resultType: "video_url",
   },
 ];
 

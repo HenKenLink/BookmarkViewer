@@ -16,7 +16,7 @@ export type BookmarkFetchItem = {
   configId: number;
   isLoaded: boolean;
 };
-export type FetchMode = "simple" | "open_simple";
+export type FetchMode = "fast" | "page";
 export type SelectorType = "regex" | "css" | "xpath";
 export type LogLevel = "debug" | "info" | "warn" | "error" | "none";
 
@@ -25,6 +25,8 @@ export type FetchTask = {
   config: FetchConfig;
   items: BookmarkFetchItem[];
 };
+
+export type ResultType = "cover_url" | "video_url";
 
 export type FetchConfig = {
   id: number;
@@ -35,6 +37,7 @@ export type FetchConfig = {
   selector?: string;
   selectorType?: SelectorType;
   attribute?: string;
+  resultType?: ResultType;
 };
 
 export type NavItem = {
@@ -48,6 +51,8 @@ export type Setting = {
   sidebarOpen: boolean;
   selectedFolderId: string;
   expandedFolderIds: string[];
+  pageModeConcurrency: number;
+  fastModeConcurrency: number;
   fetchDelayCount: number;
   fetchDelayTimeMin: number;
   fetchDelayTimeMax: number;
@@ -56,4 +61,7 @@ export type Setting = {
   favoriteFolderIds: string[];
   showFavoriteFolders: boolean;
   favoriteFolderAliases: Record<string, string>;
+  keepTabsOpen: boolean;
+  videoFetchChunkSize: number;
+  videoFetchMaxRetries: number;
 };

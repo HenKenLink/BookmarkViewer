@@ -17,6 +17,8 @@ import {
     MenuItem,
     Select,
     SelectChangeEvent,
+    Collapse,
+    TextField,
 } from "@mui/material";
 import { useStore } from "../store";
 import { exportAll, exportCovers, exportSettings, importFile } from "../utils/exportImport";
@@ -126,6 +128,162 @@ export function SettingsPage() {
                     <Divider component="li" />
                     <ListItem>
                         <ListItemText
+                            primary="Show Favorite Folders Tag Bar"
+                            secondary="Display a quick-access tag bar for favorite folders in the viewer"
+                        />
+                        <ListItemSecondaryAction>
+                            <Switch
+                                edge="end"
+                                checked={!!setting.showFavoriteFolders}
+                                onChange={toggleShowFavoriteFolders}
+                            />
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                </List>
+            </Paper>
+
+            {/* Fetch Settings */}
+            <Paper sx={{ mb: 4, overflow: 'hidden' }} variant="outlined">
+                <Box sx={{ p: 2, bgcolor: 'action.hover' }}>
+                    <Typography variant="h6" component="h2">Fetch Settings</Typography>
+                </Box>
+                <Divider />
+                <List disablePadding>
+                    <ListItem>
+                        <ListItemText
+                            primary="Page Mode: Concurrent Tabs"
+                            secondary="Number of browser tabs to open simultaneously (1-5)"
+                        />
+                        <ListItemSecondaryAction>
+                            <TextField
+                                type="number"
+                                value={setting.pageModeConcurrency || 1}
+                                onChange={(e) => setSetting({ pageModeConcurrency: Math.max(1, Math.min(5, Number(e.target.value))) })}
+                                size="small"
+                                inputProps={{ min: 1, max: 5 }}
+                                sx={{ width: 80 }}
+                            />
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                    <Divider component="li" />
+                    <ListItem>
+                        <ListItemText
+                            primary="Fast Mode: Concurrent Requests"
+                            secondary="Number of parallel HTTP requests (1-10)"
+                        />
+                        <ListItemSecondaryAction>
+                            <TextField
+                                type="number"
+                                value={setting.fastModeConcurrency || 3}
+                                onChange={(e) => setSetting({ fastModeConcurrency: Math.max(1, Math.min(10, Number(e.target.value))) })}
+                                size="small"
+                                inputProps={{ min: 1, max: 10 }}
+                                sx={{ width: 80 }}
+                            />
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                    <Divider component="li" />
+                    <ListItem>
+                        <ListItemText
+                            primary="Delay Control (Fast Mode Only)"
+                            secondary="Pause fast mode fetching periodically to avoid detection"
+                        />
+                        <ListItemSecondaryAction>
+                            <Switch
+                                edge="end"
+                                checked={!!setting.enableDelay}
+                                onChange={async () => await setSetting({ enableDelay: !setting.enableDelay })}
+                                color="primary"
+                            />
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                    <Collapse in={!!setting.enableDelay}>
+                        <Divider component="li" />
+                        <Box sx={{ p: 3 }}>
+                            <Stack spacing={3}>
+                                <Box>
+                                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 2 }}>
+                                        Pause fetching after every N items to avoid being detected as a crawler. Only applies to Fast Mode.
+                                    </Typography>
+                                    <TextField
+                                        fullWidth
+                                        label="Fetch count before delay"
+                                        type="number"
+                                        value={setting.fetchDelayCount || 5}
+                                        onChange={(e) => setSetting({ fetchDelayCount: Number(e.target.value) })}
+                                        size="small"
+                                        inputProps={{ min: 1 }}
+                                    />
+                                </Box>
+                                <Box sx={{ display: 'flex', gap: 2 }}>
+                                    <TextField
+                                        fullWidth
+                                        label="Min Delay"
+                                        type="number"
+                                        value={setting.fetchDelayTimeMin || 1000}
+                                        onChange={(e) => setSetting({ fetchDelayTimeMin: Number(e.target.value) })}
+                                        size="small"
+                                        inputProps={{ min: 0 }}
+                                    />
+                                    <TextField
+                                        fullWidth
+                                        label="Max Delay"
+                                        type="number"
+                                        value={setting.fetchDelayTimeMax || 3000}
+                                        onChange={(e) => setSetting({ fetchDelayTimeMax: Number(e.target.value) })}
+                                        size="small"
+                                        inputProps={{ min: 0 }}
+                                    />
+                                </Box>
+                            </Stack>
+                        </Box>
+                    </Collapse>
+                    <Divider component="li" />
+                    <ListItem>
+                        <ListItemText
+                            primary="Video: Chunk Size (MB)"
+                            secondary="Size of each video data chunk to fetch for frame extraction"
+                        />
+                        <ListItemSecondaryAction>
+                            <TextField
+                                type="number"
+                                value={setting.videoFetchChunkSize || 1.5}
+                                onChange={(e) => setSetting({ videoFetchChunkSize: Number(e.target.value) })}
+                                size="small"
+                                inputProps={{ min: 0.1, step: 0.1 }}
+                                sx={{ width: 80 }}
+                            />
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                    <Divider component="li" />
+                    <ListItem>
+                        <ListItemText
+                            primary="Video: Max Fetch Retries"
+                            secondary="Maximum number of additional chunks to fetch if frame extraction fails"
+                        />
+                        <ListItemSecondaryAction>
+                            <TextField
+                                type="number"
+                                value={setting.videoFetchMaxRetries || 3}
+                                onChange={(e) => setSetting({ videoFetchMaxRetries: Number(e.target.value) })}
+                                size="small"
+                                inputProps={{ min: 0 }}
+                                sx={{ width: 80 }}
+                            />
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                </List>
+            </Paper>
+
+            {/* Debug Settings */}
+            <Paper sx={{ mb: 4, overflow: 'hidden' }} variant="outlined">
+                <Box sx={{ p: 2, bgcolor: 'action.hover' }}>
+                    <Typography variant="h6" component="h2">Debug</Typography>
+                </Box>
+                <Divider />
+                <List disablePadding>
+                    <ListItem>
+                        <ListItemText
                             primary="Logging Level"
                             secondary="Set the level of detail for system logs"
                         />
@@ -147,17 +305,19 @@ export function SettingsPage() {
                     <Divider component="li" />
                     <ListItem>
                         <ListItemText
-                            primary="Show Favorite Folders Tag Bar"
-                            secondary="Display a quick-access tag bar for favorite folders in the viewer"
+                            primary="Keep Tabs Open"
+                            secondary="Do not automatically close pages when fetching covers"
                         />
                         <ListItemSecondaryAction>
                             <Switch
                                 edge="end"
-                                checked={!!setting.showFavoriteFolders}
-                                onChange={toggleShowFavoriteFolders}
+                                checked={!!setting.keepTabsOpen}
+                                onChange={async () => await setSetting({ keepTabsOpen: !setting.keepTabsOpen })}
+                                color="secondary"
                             />
                         </ListItemSecondaryAction>
                     </ListItem>
+
                 </List>
             </Paper>
 

@@ -29,7 +29,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { autocompletion } from "@codemirror/autocomplete";
 
-import { FetchConfig, SelectorType, FetchMode } from "@/entrypoints/global/types";
+import { FetchConfig, SelectorType, FetchMode, ResultType } from "@/entrypoints/global/types";
 import { toast } from "sonner";
 import InfoIcon from "@mui/icons-material/Info";
 import LanguageIcon from "@mui/icons-material/Language";
@@ -41,6 +41,8 @@ import EditIcon from "@mui/icons-material/Edit";
 import AddIcon from "@mui/icons-material/Add";
 import TextFieldsIcon from "@mui/icons-material/TextFields";
 import TuneIcon from "@mui/icons-material/Tune";
+import PhotoIcon from "@mui/icons-material/Photo";
+import OndemandVideoIcon from "@mui/icons-material/OndemandVideo";
 
 import { styled, keyframes } from "@mui/material/styles";
 
@@ -212,7 +214,8 @@ export function ConfigEditPage() {
     const [configName, setConfigName] = useState<string>("");
     const [configHostname, setConfigHostname] = useState<string>("");
     const [configRegexPettern, setConfigRegexPettern] = useState<string>("");
-    const [configMode, setConfigMode] = useState<FetchMode>("open_simple");
+    const [configMode, setConfigMode] = useState<FetchMode>("page");
+    const [configResultType, setConfigResultType] = useState<ResultType>("cover_url");
     const [configSelector, setConfigSelector] = useState<string>("");
     const [configSelectorType, setConfigSelectorType] =
         useState<SelectorType>("regex");
@@ -254,7 +257,8 @@ export function ConfigEditPage() {
             }
             setConfigName(matchedConfig.name);
             setConfigHostname(matchedConfig.hostname);
-            setConfigMode(matchedConfig.mode || "open_simple");
+            setConfigMode(matchedConfig.mode || "page");
+            setConfigResultType(matchedConfig.resultType || "cover_url");
             const initialSelectorType = matchedConfig.selectorType || "regex";
             setConfigSelectorType(initialSelectorType);
 
@@ -304,8 +308,8 @@ export function ConfigEditPage() {
         if (
             !configName ||
             !configHostname ||
-            (configMode === "open_simple" && !configSelector) ||
-            (configMode === "simple" && !configSelector)
+            (configMode === "page" && !configSelector) ||
+            (configMode === "fast" && !configSelector)
         ) {
             toast.error(
                 "Please fill in all required fields (Name, Hostname, and Mode-specific fields)"
@@ -318,10 +322,11 @@ export function ConfigEditPage() {
             hostname: configHostname,
             regexPattern: configRegexPettern,
             mode: configMode,
-            selector: (configMode === "simple" || configMode === "open_simple") ? configSelector : undefined,
-            selectorType: (configMode === "simple" || configMode === "open_simple") ? configSelectorType : undefined,
+            resultType: configMode === "page" ? configResultType : undefined,
+            selector: (configMode === "fast" || configMode === "page") ? configSelector : undefined,
+            selectorType: (configMode === "fast" || configMode === "page") ? configSelectorType : undefined,
             attribute:
-                (configMode === "simple" || configMode === "open_simple") && configSelectorType === "css"
+                (configMode === "fast" || configMode === "page") && configSelectorType === "css"
                     ? configAttribute
                     : undefined,
         };
@@ -540,23 +545,23 @@ export function ConfigEditPage() {
                                     {/* Mode Selector */}
                                     <ModeSelector>
                                         <ModeButton
-                                            active={configMode === "open_simple"}
-                                            onClick={() => setConfigMode("open_simple")}
+                                            active={configMode === "page"}
+                                            onClick={() => setConfigMode("page")}
                                             startIcon={<LanguageIcon />}
                                         >
-                                            Open Page Simple
+                                            Page Mode
                                         </ModeButton>
                                         <ModeButton
-                                            active={configMode === "simple"}
-                                            onClick={() => setConfigMode("simple")}
+                                            active={configMode === "fast"}
+                                            onClick={() => setConfigMode("fast")}
                                             startIcon={<TextFieldsIcon />}
                                         >
-                                            Simple Selector
+                                            Fast Mode
                                         </ModeButton>
                                     </ModeSelector>
 
                                     {/* Simple & Open Simple Mode */}
-                                    <Collapse in={configMode === "simple" || configMode === "open_simple"} timeout={setting.enableAnimations ? undefined : 0}>
+                                    <Collapse in={configMode === "fast" || configMode === "page"} timeout={setting.enableAnimations ? undefined : 0}>
                                         <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
                                             {/* Selector Type Buttons */}
                                             <Box>
@@ -585,6 +590,44 @@ export function ConfigEditPage() {
                                                     )}
                                                 </Stack>
                                             </Box>
+                                            
+                                            {configMode === "page" && (
+                                                <Box>
+                                                    <Typography
+                                                        variant="subtitle2"
+                                                        color="text.secondary"
+                                                        sx={{ mb: 1.5, fontWeight: 600 }}
+                                                    >
+                                                        Result Type
+                                                    </Typography>
+                                                    <FormControl fullWidth size="small">
+                                                        <Select
+                                                            value={configResultType}
+                                                            onChange={(e) => setConfigResultType(e.target.value as ResultType)}
+                                                            sx={{ borderRadius: 2 }}
+                                                        >
+                                                            <MenuItem value="cover_url">
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                                    <PhotoIcon fontSize="small" color="primary" />
+                                                                    <Box>
+                                                                        <Typography variant="body2" fontWeight={500}>Cover URL</Typography>
+                                                                        <Typography variant="caption" color="text.secondary">Extracts a direct image link</Typography>
+                                                                    </Box>
+                                                                </Box>
+                                                            </MenuItem>
+                                                            <MenuItem value="video_url">
+                                                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                                    <OndemandVideoIcon fontSize="small" color="primary" />
+                                                                    <Box>
+                                                                        <Typography variant="body2" fontWeight={500}>Video URL</Typography>
+                                                                        <Typography variant="caption" color="text.secondary">Captures the first frame of the video</Typography>
+                                                                    </Box>
+                                                                </Box>
+                                                            </MenuItem>
+                                                        </Select>
+                                                    </FormControl>
+                                                </Box>
+                                            )}
 
                                             {configSelectorType === "css" && (
                                                 <StyledTextField
