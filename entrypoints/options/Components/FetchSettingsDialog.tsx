@@ -35,6 +35,7 @@ export function FetchSettingsDialog({ open, onClose }: FetchSettingsDialogProps)
     const [keepTabsOpen, setKeepTabsOpen] = useState<boolean>(setting.keepTabsOpen || false);
     const [videoFetchChunkSize, setVideoFetchChunkSize] = useState<number>(setting.videoFetchChunkSize ?? 1.5);
     const [videoFetchMaxRetries, setVideoFetchMaxRetries] = useState<number>(setting.videoFetchMaxRetries ?? 3);
+    const [showActiveTabBanner, setShowActiveTabBanner] = useState<boolean>(setting.showActiveTabBanner ?? true);
 
     useEffect(() => {
         if (open) {
@@ -47,6 +48,7 @@ export function FetchSettingsDialog({ open, onClose }: FetchSettingsDialogProps)
             setKeepTabsOpen(setting.keepTabsOpen || false);
             setVideoFetchChunkSize(setting.videoFetchChunkSize ?? 1.5);
             setVideoFetchMaxRetries(setting.videoFetchMaxRetries ?? 3);
+            setShowActiveTabBanner(setting.showActiveTabBanner ?? true);
         }
     }, [open, setting]);
 
@@ -61,6 +63,7 @@ export function FetchSettingsDialog({ open, onClose }: FetchSettingsDialogProps)
             keepTabsOpen,
             videoFetchChunkSize: Math.max(0.1, videoFetchChunkSize),
             videoFetchMaxRetries: Math.max(0, videoFetchMaxRetries),
+            showActiveTabBanner,
         });
         onClose();
     };
@@ -215,6 +218,26 @@ export function FetchSettingsDialog({ open, onClose }: FetchSettingsDialogProps)
                             )}
                         </Stack>
                     </Collapse>
+
+                    <Divider />
+
+                    {/* UI Settings */}
+                    <Box>
+                        <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1.5 }}>
+                            User Interface
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Box>
+                                <Typography variant="body2" fontWeight={500}>Show Active Tab Match Banner</Typography>
+                                <Typography variant="caption" color="text.secondary">Show status bar in popup when visiting matched sites</Typography>
+                            </Box>
+                            <Switch
+                                checked={showActiveTabBanner}
+                                onChange={(e) => setShowActiveTabBanner(e.target.checked)}
+                                color="primary"
+                            />
+                        </Box>
+                    </Box>
                 </Stack>
 
                 <Box sx={{ mt: 3, pt: 3, borderTop: 1, borderColor: 'divider' }}>

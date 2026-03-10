@@ -29,6 +29,7 @@ export default defineConfig({
     },
     action: {
       default_icon: "/icon/48.png",
+      default_popup: "popup.html",
     },
     permissions: [
       "storage",

@@ -83,16 +83,17 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
         setSelectedFolderId(node.id);
     };
 
-    const handleFetchThumbs = async () => {
-        const bookmarks = getAllBookmarksInFolderAction(node.id);
-        if (bookmarks.length > 0) {
-            await forceFetchThumbnails(bookmarks.map(bk => bk.id));
-        }
-    };
-
     const handleForceFetchThumbs = async () => {
         const bookmarks = getAllBookmarksInFolderAction(node.id);
         if (bookmarks.length > 0) {
+            const loadedImageMap = useStore.getState().loadedImageMap;
+            const hasAnyThumb = bookmarks.some(bk => !!loadedImageMap[bk.id]);
+            
+            if (hasAnyThumb) {
+                const confirmed = window.confirm("该文件夹下部分书签已有封面，是否强制重新获取？");
+                if (!confirmed) return;
+            }
+
             await forceFetchThumbnails(bookmarks.map(bk => bk.id));
         }
     };
@@ -108,13 +109,7 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
             onClick: handleShowBookmarks,
         },
         {
-            label: "Fetch thumbs",
-            icon: <DownloadIcon fontSize="small" />,
-            onClick: handleFetchThumbs,
-            divider: true,
-        },
-        {
-            label: "Force fetch thumbs",
+            label: "Fetch thumbnails",
             icon: <RefreshIcon fontSize="small" />,
             onClick: handleForceFetchThumbs,
         },
@@ -123,6 +118,7 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
             icon: isFavorite ? <StarIcon fontSize="small" sx={{ color: "warning.main" }} /> : <StarBorderIcon fontSize="small" />,
             onClick: handleToggleFavorite,
             divider: true,
+            sx: { mt: 1 }
         },
     ];
 

@@ -64,4 +64,5 @@ export type Setting = {
   keepTabsOpen: boolean;
   videoFetchChunkSize: number;
   videoFetchMaxRetries: number;
+  showActiveTabBanner: boolean;
 };

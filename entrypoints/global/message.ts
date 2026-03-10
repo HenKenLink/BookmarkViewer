@@ -7,4 +7,7 @@ export enum messageId {
   fetchStarted = "fetchStarted",
   fetchStopped = "fetchStopped",
   stopFetch = "stopFetch",
+  // Cover status on matching pages
+  coverStatusQuery = "coverStatusQuery",
+  coverStatusResult = "coverStatusResult",
 }

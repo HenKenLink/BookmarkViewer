@@ -300,6 +300,10 @@ let currentProgress = 0;
 let totalItems = 0;
 let abortController: AbortController | null = null;
 
+// Track ongoing auto-fetch tasks (for Feature 2 real-time query)
+// Map<pageUrl, status>
+const activeAutoFetchTasks = new Map<string, "fetching" | "success" | "error">();
+
 // Concurrency helper: run tasks with a max concurrency limit
 async function runWithConcurrency<T>(
   items: T[],
@@ -333,6 +337,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     abortController = new AbortController();
     const signal = abortController.signal;
     const fetchTaskList: FetchTask[] = message.fetchTaskList;
+    const force = !!message.force;
 
     // Get current settings
     const settingsRaw = await browser.storage.local.get(SETTINGS_KEY);
@@ -352,15 +357,17 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     // Shared progress counter (atomic-like via single-threaded JS)
     let fastItemsCompletedSinceDelay = 0;
 
-    // Pre-filtering: skip already fetched thumbnails
-    const allUrls = fetchTaskList.flatMap(task => task.items.map(item => item.pageUrl));
-    const existingThumbs = await browser.storage.local.get(allUrls);
+    // Pre-filtering: skip already fetched thumbnails (UNLESS force is true)
+    if (!force) {
+      const allUrls = fetchTaskList.flatMap(task => task.items.map(item => item.pageUrl));
+      const existingThumbs = await browser.storage.local.get(allUrls);
 
-    for (const task of fetchTaskList) {
-      task.items = task.items.filter(item => {
-        const existing = existingThumbs[item.pageUrl];
-        return !existing || (Array.isArray(existing) && existing.length === 0);
-      });
+      for (const task of fetchTaskList) {
+        task.items = task.items.filter(item => {
+          const existing = existingThumbs[item.pageUrl];
+          return !existing || (Array.isArray(existing) && existing.length === 0);
+        });
+      }
     }
 
     // Calculate total items
@@ -700,6 +707,277 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
   }
 });
 
+
+// ========== COVER STATUS: BADGE HELPERS ==========
+
+async function getMatchedConfigForUrl(url: string): Promise<{ config: FetchConfig; hostname: string } | null> {
+  try {
+    const configsRaw = await browser.storage.local.get("__CONFIGS__");
+    const configs: FetchConfig[] = (configsRaw["__CONFIGS__"] as FetchConfig[]) || [];
+
+    const parsedUrl = new URL(url);
+    const hostname = parsedUrl.hostname;
+
+    for (const config of configs) {
+      let configHostname = config.hostname;
+      if (configHostname && configHostname.includes("://")) {
+        try { configHostname = new URL(configHostname).hostname; } catch (_) {}
+      }
+
+      // Use includes for more flexible matching, like the options page
+      if (hostname.includes(configHostname) || (configHostname && hostname.includes(configHostname))) {
+        if (config.regexPattern) {
+          const regex = new RegExp(config.regexPattern);
+          if (!regex.test(url)) continue;
+        }
+        return { config, hostname: configHostname };
+      }
+    }
+  } catch (e) {
+    logger.warn("[Background] Error checking URL against configs", e);
+  }
+  return null;
+}
+
+async function hasCoverForUrl(url: string): Promise<boolean> {
+  try {
+    const result = await browser.storage.local.get(url);
+    const raw = result[url] as any;
+    return raw && Array.isArray(raw) && raw.length > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function setBadgeForTab(tabId: number, status: "has-cover" | "no-cover" | "fetching" | "clear") {
+  try {
+    if (!browser.action) return;
+    switch (status) {
+      case "has-cover":
+        await browser.action.setBadgeText({ text: "✓", tabId });
+        await browser.action.setBadgeBackgroundColor({ color: "#4caf50", tabId });
+        break;
+      case "no-cover":
+        await browser.action.setBadgeText({ text: "!", tabId });
+        await browser.action.setBadgeBackgroundColor({ color: "#ff9800", tabId });
+        break;
+      case "fetching":
+        await browser.action.setBadgeText({ text: "…", tabId });
+        await browser.action.setBadgeBackgroundColor({ color: "#2196f3", tabId });
+        break;
+      case "clear":
+        await browser.action.setBadgeText({ text: "", tabId });
+        break;
+    }
+  } catch (_) {}
+}
+
+// Process a single page-mode item using an EXISTING tab (Feature 2: reuse the user's open tab)
+async function processExistingTabForCover(
+  tabId: number,
+  pageUrl: string,
+  config: FetchConfig,
+  signal?: AbortSignal
+): Promise<boolean> {
+  const selector = config.selector!;
+  const type = config.selectorType || "regex";
+  const attribute = config.attribute;
+
+  try {
+    // Wait for tab to be fully loaded before executing script
+    const tab = await browser.tabs.get(tabId);
+    if (tab.status !== "complete") {
+      // Wait for it to complete loading
+      await new Promise<void>((resolve) => {
+        const listener = (updatedId: number, changeInfo: any) => {
+          if (updatedId === tabId && changeInfo.status === "complete") {
+            browser.tabs.onUpdated.removeListener(listener);
+            resolve();
+          }
+        };
+        browser.tabs.onUpdated.addListener(listener);
+        // Timeout after 15s
+        setTimeout(() => {
+          browser.tabs.onUpdated.removeListener(listener);
+          resolve();
+        }, 15000);
+      });
+    }
+
+    const settingsRaw = await browser.storage.local.get(SETTINGS_KEY);
+    const settings: Setting = settingsRaw[SETTINGS_KEY] as Setting;
+
+    const res = await browser.scripting.executeScript({
+      target: { tabId },
+      func: pageScriptExecutor,
+      args: [selector, type, attribute ?? null],
+      world: "MAIN",
+    });
+
+    const targetUrl = res?.[0]?.result;
+    let finalThumbUrl: string | null | undefined = null;
+
+    if (targetUrl) {
+      if (config.resultType === "video_url") {
+        const chunkSizeMB = settings?.videoFetchChunkSize ?? 1.5;
+        const maxRetries = settings?.videoFetchMaxRetries ?? 3;
+        const totalAttempts = maxRetries + 1;
+        const chunkSizeBytes = Math.floor(chunkSizeMB * 1024 * 1024);
+        const fetchedChunks: Blob[] = [];
+
+        const metadataEnd = await detectMp4MetadataEnd(targetUrl);
+        let bytesFetched = 0;
+
+        for (let i = 0; i < totalAttempts; i++) {
+          let start = bytesFetched;
+          let end = (i + 1) * chunkSizeBytes - 1;
+          if (i === 0 && metadataEnd && end < metadataEnd + 256 * 1024) {
+            end = metadataEnd + 256 * 1024;
+          } else if (start > end) {
+            end = start + chunkSizeBytes - 1;
+          }
+
+          const chunk = await fetchVideoChunk(targetUrl, start, end);
+          if (chunk) {
+            fetchedChunks.push(chunk);
+            bytesFetched = end + 1;
+            const combinedBlob = new Blob(fetchedChunks);
+            const videoDataUrl = await blobToDataUrl(combinedBlob);
+
+            const frameRes = await browser.scripting.executeScript({
+              target: { tabId },
+              func: videoDataUrlFrameExtractor,
+              args: [videoDataUrl],
+              world: "ISOLATED",
+            });
+            finalThumbUrl = frameRes?.[0]?.result;
+            if (finalThumbUrl) break;
+          }
+          if (i < totalAttempts - 1) {
+            logger.warn(`[Background] Frame extraction retry ${i + 1}/${totalAttempts} for existing tab`);
+          }
+        }
+      } else {
+        finalThumbUrl = targetUrl;
+      }
+    }
+
+    if (finalThumbUrl) {
+      const success = await saveThumb({ pageUrl, thumbUrl: finalThumbUrl });
+      if (success) {
+        // Notify the options page if it's open
+        try {
+          browser.runtime.sendMessage({
+            type: messageId.singleThumbFinished,
+            pageUrl,
+            progress: 1,
+            total: 1,
+          });
+        } catch (_) {}
+        
+        showOnPageNotification(tabId, "封面获取成功！", "success", pageUrl);
+        return true;
+      }
+    }
+    
+    showOnPageNotification(tabId, "封面获取失败", "error", pageUrl);
+    return false;
+  } catch (err) {
+    logger.error("[Background] processExistingTabForCover failed", err);
+    showOnPageNotification(tabId, "封面获取出错", "error", pageUrl);
+  } finally {
+    activeAutoFetchTasks.delete(pageUrl);
+  }
+  return false;
+}
+
+function showOnPageNotification(tabId: number, text: string, status: "loading" | "success" | "error", url?: string) {
+  const trySend = () => {
+    browser.tabs.sendMessage(tabId, {
+      type: "show-notification",
+      text,
+      status,
+      url
+    }).catch(() => {
+       // Ignore - content script might not be ready
+    });
+  };
+
+  trySend();
+  // For 'loading' status, retry once after a delay in case the page was just refreshing/loading
+  if (status === "loading") {
+    setTimeout(trySend, 1500);
+    setTimeout(trySend, 4000); // Second retry for slow pages
+  }
+}
+
+async function isUrlBookmarked(url: string): Promise<boolean> {
+  try {
+    const results = await browser.bookmarks.search({ url });
+    return results.length > 0;
+  } catch (_) {
+    return false;
+  }
+}
+
+// Fast-mode fetch using existing tab's URL (no tab opening needed)
+async function fastFetchCoverForUrl(pageUrl: string, config: FetchConfig): Promise<boolean> {
+  const selector = config.selector!;
+  const type = config.selectorType || "regex";
+  const attribute = config.attribute;
+
+  try {
+    const response = await fetch(pageUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      },
+    });
+    const html = await response.text();
+    let thumbUrl: string | null | undefined = null;
+
+    if (type === "regex") {
+      const regex = new RegExp(selector);
+      const match = html.match(regex);
+      if (match && match[1]) thumbUrl = match[1];
+    } else {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      if (type === "css") {
+        const element = doc.querySelector(selector);
+        if (element) {
+          thumbUrl = attribute
+            ? element.getAttribute(attribute)
+            : element.getAttribute("src") || element.getAttribute("content") || element.textContent;
+        }
+      } else if (type === "xpath") {
+        const result = doc.evaluate(selector, doc, null, XPathResult.FIRST_ORDERED_NODE_TYPE, null);
+        const node = result.singleNodeValue;
+        if (node) {
+          if (node.nodeType === Node.ATTRIBUTE_NODE) thumbUrl = node.nodeValue;
+          else if (node.nodeType === Node.ELEMENT_NODE) {
+            const el = node as Element;
+            thumbUrl = el.getAttribute("src") || el.getAttribute("content") || el.getAttribute("href") || el.textContent;
+          } else thumbUrl = node.textContent;
+        }
+      }
+    }
+
+    if (thumbUrl) {
+      thumbUrl = new URL(thumbUrl, pageUrl).toString();
+      const success = await saveThumb({ pageUrl, thumbUrl });
+      if (success) {
+        try {
+          browser.runtime.sendMessage({ type: messageId.singleThumbFinished, pageUrl, progress: 1, total: 1 });
+        } catch (_) {}
+        return true;
+      }
+    }
+  } catch (err) {
+    logger.error("[Background] fastFetchCoverForUrl failed", err);
+  }
+  return false;
+}
+
 export default defineBackground(() => {
   (async () => {
     logger.info(`[Background] Initializing. DEV: ${__DEV__}, CHROME: ${__CHROME__}`);
@@ -714,14 +992,142 @@ export default defineBackground(() => {
   })();
 
   if (__CHROME__) {
+    // onClicked only fires when there's no default_popup; kept as fallback
     browser.action.onClicked.addListener(openUI);
   } else {
     browser.browserAction.onClicked.addListener(openUI);
   }
 
-  // browser.runtime.onMessage.addListener(async (message, sender) => {
-  //   if (message.type === messageId.thumbUrl) {
-  //     await saveThumb(message);
-  //   }
-  // });
+  // Feature 2: Listen for tab navigation to matching pages
+  browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+    // Only react when the page finishes loading and has a URL
+    if (changeInfo.status !== "complete" || !tab.url) return;
+
+    const url = tab.url;
+    // Ignore extension pages and browser-internal URLs
+    if (url.startsWith("chrome://") || url.startsWith("moz-extension://") ||
+        url.startsWith("chrome-extension://") || url.startsWith("about:") ||
+        url.startsWith("file://")) {
+      setBadgeForTab(tabId, "clear");
+      return;
+    }
+
+    // Check if this URL matches any saved config
+    const matched = await getMatchedConfigForUrl(url);
+    if (!matched) {
+      // Clear badge for non-matching pages
+      setBadgeForTab(tabId, "clear");
+      return;
+    }
+
+    const { config } = matched;
+
+    // Check if this URL is actually bookmarked (to avoid fetching for every match in history)
+    const bookmarked = await isUrlBookmarked(url);
+    if (!bookmarked) return;
+
+    // Check if a cover already exists for this page
+    const hasCover = await hasCoverForUrl(url);
+    if (hasCover) {
+      setBadgeForTab(tabId, "has-cover");
+      return;
+    }
+
+    // No cover yet - check if config has a selector to fetch it
+    if (!config.selector) {
+      setBadgeForTab(tabId, "no-cover");
+      return;
+    }
+
+    // Show fetching badge and auto-fetch using the active tab
+    setBadgeForTab(tabId, "fetching");
+    logger.info(`[Background] Auto-fetching cover for matched page: ${url} (mode: ${config.mode})`);
+    
+    activeAutoFetchTasks.set(url, "fetching");
+
+    showOnPageNotification(tabId, "正在自动获取封面...", "loading", url);
+
+    browser.notifications.create({
+      type: "basic",
+      iconUrl: "/icon/128.png",
+      title: "正在获取封面",
+      message: `检测到匹配页面，正在尝试获取封面...`,
+    });
+
+    let success = false;
+    if (config.mode === "page") {
+      // Reuse the existing tab the user has open
+      success = await processExistingTabForCover(tabId, url, config);
+    } else    if (config.mode === "fast") {
+      success = await fastFetchCoverForUrl(url, config);
+      activeAutoFetchTasks.set(url, success ? "success" : "error");
+      setTimeout(() => activeAutoFetchTasks.delete(url), 5000);
+    }
+
+    if (config.mode === "fast") {
+      setBadgeForTab(tabId, success ? "has-cover" : "no-cover");
+      if (success) {
+        browser.notifications.create({
+          type: "basic",
+          iconUrl: "/icon/48.png",
+          title: "封面获取成功",
+          message: `已自动获取 ${url} 的封面。`,
+        });
+      }
+    }
+  });
+
+  browser.runtime.onMessage.addListener(async (message, sender) => {
+    if (message.type === messageId.coverStatusQuery) {
+      const { url } = message;
+      const status = activeAutoFetchTasks.get(url);
+      return { status };
+    }
+  });
+
+  // Listener for new bookmarks to trigger auto-fetch if current tab matches
+  browser.bookmarks.onCreated.addListener(async (id, bookmark) => {
+    if (!bookmark.url) return;
+    const url = bookmark.url;
+
+    const matched = await getMatchedConfigForUrl(url);
+    if (!matched) return;
+
+    // Find if any tab has this URL open and is the active tab
+    const tabs = await browser.tabs.query({ url });
+    for (const tab of tabs) {
+      if (tab.id && tab.active) {
+        // Trigger the same logic as onUpdated
+        // We can just rely on the fact that if it's newly bookmarked and matches config,
+        // we should check it.
+        const hasCover = await hasCoverForUrl(url);
+        if (hasCover) {
+          setBadgeForTab(tab.id, "has-cover");
+          continue;
+        }
+
+        if (!matched.config.selector) {
+          setBadgeForTab(tab.id, "no-cover");
+          continue;
+        }
+
+        setBadgeForTab(tab.id, "fetching");
+        activeAutoFetchTasks.set(url, "fetching");
+        showOnPageNotification(tab.id, "检测到新收藏，正在获取封面...", "loading", url);
+
+        if (matched.config.mode === "page") {
+          processExistingTabForCover(tab.id, url, matched.config).then(success => {
+             setBadgeForTab(tab.id!, success ? "has-cover" : "no-cover");
+          });
+        } else {
+          fastFetchCoverForUrl(url, matched.config).then(success => {
+             setBadgeForTab(tab.id!, success ? "has-cover" : "no-cover");
+             activeAutoFetchTasks.set(url, success ? "success" : "error");
+             setTimeout(() => activeAutoFetchTasks.delete(url), 5000);
+          });
+        }
+      }
+    }
+  });
 });
+

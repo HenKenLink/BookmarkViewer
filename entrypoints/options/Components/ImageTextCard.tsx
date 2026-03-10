@@ -125,6 +125,10 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
   };
 
   const handleFetchThumb = async () => {
+    if (image) {
+      const confirmed = window.confirm("当前书签已有封面，是否强制重新获取？");
+      if (!confirmed) return;
+    }
     await forceFetchThumbnails([bookmarkId]);
   };
 

@@ -328,6 +328,7 @@ export const actionSlice: StateCreator<Store, [], [], storeAction> = (
       await browser.runtime.sendMessage({
         type: messageId.getThumb,
         fetchTaskList: fetchTasks,
+        force: true,
       });
     }
   },
@@ -430,6 +431,7 @@ export const useStore = create<Store>()((...action) => ({
     keepTabsOpen: false,
     videoFetchChunkSize: 1.5,
     videoFetchMaxRetries: 3,
+    showActiveTabBanner: true,
   } as unknown as Setting,
   bookmarkTree: null as BookmarkTreeNode | null,
   bookmarkList: [] as BookmarkTreeNode[],

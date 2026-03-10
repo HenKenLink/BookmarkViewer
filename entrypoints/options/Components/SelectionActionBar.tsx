@@ -26,6 +26,14 @@ export const SelectionActionBar: React.FC = () => {
 
     const handleBatchFetchThumbs = async () => {
         if (selectedBookmarkIds.length > 0) {
+            const loadedImageMap = useStore.getState().loadedImageMap;
+            const hasAnyThumb = selectedBookmarkIds.some(id => !!loadedImageMap[id]);
+            
+            if (hasAnyThumb) {
+                const confirmed = window.confirm("选中的书签中部分已有封面，是否强制重新获取？");
+                if (!confirmed) return;
+            }
+
             await forceFetchThumbnails(selectedBookmarkIds);
             clearSelection();
         }
