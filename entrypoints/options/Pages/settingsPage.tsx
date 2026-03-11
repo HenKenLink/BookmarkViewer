@@ -185,6 +185,20 @@ export function SettingsPage() {
                     <Divider component="li" />
                     <ListItem>
                         <ListItemText
+                            primary="Auto-fetch on Bookmark"
+                            secondary="Automatically fetch thumbnail when a new bookmark is created"
+                        />
+                        <ListItemSecondaryAction>
+                            <Switch
+                                edge="end"
+                                checked={!!setting.autoFetchOnBookmark}
+                                onChange={async () => await setSetting({ autoFetchOnBookmark: !setting.autoFetchOnBookmark })}
+                            />
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                    <Divider component="li" />
+                    <ListItem>
+                        <ListItemText
                             primary="Delay Control (Fast Mode Only)"
                             secondary="Pause fast mode fetching periodically to avoid detection"
                         />

@@ -65,4 +65,9 @@ export type Setting = {
   videoFetchChunkSize: number;
   videoFetchMaxRetries: number;
   showActiveTabBanner: boolean;
+  autoFetchOnBookmark: boolean;
+  sortBy: "name" | "dateAdded";
+  sortOrder: "asc" | "desc";
+  foldersPosition: "top" | "bottom" | "mixed";
+  urlFilters: string[];
 };

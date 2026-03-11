@@ -21,6 +21,10 @@ import { FolderTree } from "../Components/FolderTree";
 import { FolderCard } from "../Components/FolderCard";
 import { FetchSettingsDialog } from "../Components/FetchSettingsDialog";
 import { SelectionActionBar } from "../Components/SelectionActionBar";
+import { SortControls } from "../Components/SortControls";
+import { UrlFilterControls } from "../Components/UrlFilterControls";
+import { FavoriteFoldersBar } from "../Components/FavoriteFoldersBar";
+import { sortBookmarks, filterByUrlDomains } from "../../global/sortFilterUtils";
 
 import { NavBar } from "../Components/NavBar";
 import LaunchIcon from "@mui/icons-material/Launch";
@@ -61,80 +65,7 @@ function FetchProgress({ isFetching, progress, total, onStop }: { isFetching: bo
   );
 }
 
-function FavoriteFoldersBar({ favoriteFolderIds, bookmarkMap, selectedFolderId, onSelect, aliases }: { favoriteFolderIds: string[], bookmarkMap: Record<string, BookmarkTreeNode>, selectedFolderId: string, onSelect: (id: string) => void, aliases: Record<string, string> }) {
-  const [expanded, setExpanded] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isOverflowing, setIsOverflowing] = useState(false);
 
-  useEffect(() => {
-    // Check if the container is overflowing
-    if (containerRef.current) {
-      const isOverflow = containerRef.current.scrollWidth > containerRef.current.clientWidth;
-      setIsOverflowing(isOverflow || expanded);
-    }
-  }, [favoriteFolderIds, expanded]);
-
-  if (favoriteFolderIds.length === 0) return null;
-
-  return (
-    <Box sx={{ mb: 2, display: 'flex', alignItems: 'flex-start', gap: 1, px: 1 }}>
-      <Box
-        ref={containerRef}
-        sx={{
-          display: 'flex',
-          flexWrap: expanded ? 'wrap' : 'nowrap',
-          overflowX: expanded ? 'visible' : 'auto',
-          overflowY: expanded ? 'visible' : 'hidden',
-          gap: 1,
-          flexGrow: 1,
-          minWidth: 0, // Keeps flex item from ignoring container constraints
-          height: expanded ? 'auto' : 32, // Fixed height for one line
-          scrollbarWidth: 'none', // Firefox
-          '&::-webkit-scrollbar': {
-            display: 'none', // Chrome/Safari
-          },
-          WebkitMaskImage: (!expanded && isOverflowing) ? 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)' : 'none',
-          maskImage: (!expanded && isOverflowing) ? 'linear-gradient(to right, black calc(100% - 24px), transparent 100%)' : 'none',
-        }}
-      >
-        {favoriteFolderIds.map(id => {
-          const folder = bookmarkMap[id];
-          if (!folder) return null;
-          return (
-            <Chip
-              key={`tag-${id}`}
-              icon={<StarIcon fontSize="small" sx={{ color: selectedFolderId === id ? "white !important" : "warning.main" }} />}
-              label={aliases[id] ? aliases[id] : folder.title || "Untitled"}
-              onClick={() => onSelect(id)}
-              color={selectedFolderId === id ? "warning" : "default"}
-              sx={{
-                fontWeight: selectedFolderId === id ? 600 : 400,
-                flexShrink: 0,
-                transition: "all 0.2s ease",
-                "&:last-of-type": {
-                  marginRight: '24px' // Ensures it can be scrolled fully clear of the fading mask
-                },
-                "&:hover": {
-                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                }
-              }}
-            />
-          );
-        })}
-      </Box>
-      {isOverflowing && (
-        <IconButton
-          size="small"
-          onClick={() => setExpanded(!expanded)}
-          sx={{ flexShrink: 0, mt: -0.5 }}
-          title={expanded ? "Show less" : "Show more"}
-        >
-          {expanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-        </IconButton>
-      )}
-    </Box>
-  );
-}
 
 export function ViewerPage() {
   const loadFetchConfig = useStore((state) => state.loadFetchConfig);
@@ -168,6 +99,7 @@ export function ViewerPage() {
   const isSelectionMode = useStore((state) => state.isSelectionMode);
   const setIsSelectionMode = useStore((state) => state.setIsSelectionMode);
   const setting = useStore((state) => state.setting);
+  const setSetting = useStore((state) => state.setSetting);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -298,41 +230,62 @@ export function ViewerPage() {
 
   const displayItems = useMemo(() => {
     const query = searchQuery.toLowerCase();
+    
+    let items: ({ type: 'bookmark' | 'folder', data: BookmarkTreeNode })[] = [];
 
     // 1. If searching, show flattened results from matchedBookmarks
     if (query) {
-      return matchedBookmarks.filter(bk =>
+      items = matchedBookmarks.filter(bk =>
         bk.title.toLowerCase().includes(query) || (bk.url || "").toLowerCase().includes(query)
       ).map(bk => ({ type: 'bookmark' as const, data: bk }));
     }
-
     // 2. If 'All Bookmarks', show all matched bookmarks flattened
-    if (selectedFolderId === "all") {
-      return matchedBookmarks.map(bk => ({ type: 'bookmark' as const, data: bk }));
+    else if (selectedFolderId === "all") {
+      items = matchedBookmarks.map(bk => ({ type: 'bookmark' as const, data: bk }));
+    }
+    // 3. Explorer view: show direct children of the selected folder
+    else {
+      const currentFolder = bookmarkMap[selectedFolderId];
+      if (currentFolder && currentFolder.children) {
+        currentFolder.children.forEach(child => {
+          if (child.url) {
+            // Only show if it matches the config (is in matchedBookmarks)
+            if (matchedBookmarks.some(mb => mb.id === child.id)) {
+              items.push({ type: 'bookmark', data: child });
+            }
+          } else {
+            // Only show if it contains matched bookmarks in its subtree
+            if (matchedFolderIds.has(child.id)) {
+              items.push({ type: 'folder', data: child });
+            }
+          }
+        });
+      }
     }
 
-    // 3. Explorer view: show direct children of the selected folder
-    const currentFolder = bookmarkMap[selectedFolderId];
-    if (!currentFolder || !currentFolder.children) return [];
+    // Apply URL filtering
+    items = filterByUrlDomains(items, setting.urlFilters || []);
 
-    const items: ({ type: 'bookmark' | 'folder', data: BookmarkTreeNode })[] = [];
-
-    currentFolder.children.forEach(child => {
-      if (child.url) {
-        // Only show if it matches the config (is in matchedBookmarks)
-        if (matchedBookmarks.some(mb => mb.id === child.id)) {
-          items.push({ type: 'bookmark', data: child });
-        }
-      } else {
-        // Only show if it contains matched bookmarks in its subtree
-        if (matchedFolderIds.has(child.id)) {
-          items.push({ type: 'folder', data: child });
-        }
-      }
-    });
+    // Apply Sorting
+    items = sortBookmarks(
+      items,
+      setting.sortBy || "dateAdded",
+      setting.sortOrder || "desc",
+      setting.foldersPosition || "top"
+    );
 
     return items;
-  }, [selectedFolderId, matchedBookmarks, searchQuery, bookmarkMap, matchedFolderIds]);
+  }, [
+    selectedFolderId,
+    matchedBookmarks,
+    searchQuery,
+    bookmarkMap,
+    matchedFolderIds,
+    setting.urlFilters,
+    setting.sortBy,
+    setting.sortOrder,
+    setting.foldersPosition
+  ]);
 
   // Handlers moved to SelectionActionBar
   // const handleBatchFetchThumbs = async () => { ... }
@@ -536,15 +489,25 @@ export function ViewerPage() {
                     <SearchIcon color="action" />
                   </InputAdornment>
                 ),
-                endAdornment: searchQuery && (
-                  <InputAdornment position="end">
-                    <IconButton
+                endAdornment: (
+                  <InputAdornment position="end" sx={{ gap: 0.25 }}>
+                    {searchQuery && (
+                      <IconButton size="small" onClick={() => setSearchQuery("")} edge={false}>
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                    <UrlFilterControls
+                      urlFilters={setting.urlFilters || []}
+                      onChange={(filters) => setSetting({ urlFilters: filters })}
                       size="small"
-                      onClick={() => setSearchQuery("")}
-                      edge="end"
-                    >
-                      <ClearIcon fontSize="small" />
-                    </IconButton>
+                    />
+                    <SortControls
+                      sortBy={setting.sortBy || "dateAdded"}
+                      sortOrder={setting.sortOrder || "desc"}
+                      foldersPosition={setting.foldersPosition || "top"}
+                      onChange={(updates) => setSetting(updates)}
+                      size="small"
+                    />
                   </InputAdornment>
                 ),
               },
@@ -553,6 +516,7 @@ export function ViewerPage() {
               "& .MuiOutlinedInput-root": {
                 borderRadius: 3,
                 backgroundColor: "background.paper",
+                "& .MuiInputAdornment-positionEnd": { gap: 0.25 },
               }
             }}
           />

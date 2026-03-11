@@ -118,11 +118,11 @@ async function pageScriptExecutor(selector: string, type: string, attribute: str
   // Poll for up to 10 seconds
   const startTime = Date.now();
   const timeout = 10000;
-  
+
   while (Date.now() - startTime < timeout) {
     const thumbUrl = getThumb();
     if (thumbUrl) return thumbUrl;
-    
+
     // Wait 500ms
     await new Promise(resolve => setTimeout(resolve, 500));
   }
@@ -140,15 +140,15 @@ async function fetchVideoChunk(videoUrl: string, startByte: number, endByte: num
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
       }
     });
-    
+
     // Check if the response is successful (200 or 206 Partial Content)
     if (!res.ok) {
-       logger.error(`[Background] Failed to fetch video chunk, status: ${res.status}`);
-       return null;
+      logger.error(`[Background] Failed to fetch video chunk, status: ${res.status}`);
+      return null;
     }
 
     return await res.blob();
-  } catch(e) {
+  } catch (e) {
     logger.error("[Background] Error fetching video chunk", e);
     return null;
   }
@@ -167,16 +167,16 @@ function blobToDataUrl(blob: Blob): Promise<string> {
 async function detectMp4MetadataEnd(videoUrl: string): Promise<number | null> {
   try {
     // 先取前 128KB 探测结构
-    const res = await fetch(videoUrl, { 
-      headers: { 
+    const res = await fetch(videoUrl, {
+      headers: {
         "Range": "bytes=0-131071",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
-      } 
+      }
     });
     if (!res.ok) return null;
     const buffer = await res.arrayBuffer();
     const view = new DataView(buffer);
-    
+
     let offset = 0;
     while (offset < view.byteLength - 8) {
       const size = view.getUint32(offset);
@@ -186,13 +186,13 @@ async function detectMp4MetadataEnd(videoUrl: string): Promise<number | null> {
         view.getUint8(offset + 6),
         view.getUint8(offset + 7)
       );
-      
+
       // 如果找到了 moov，说明元数据到此结束
       if (type === 'moov') {
         logger.info(`[Background] Detected 'moov' atom at offset ${offset}, size ${size}. Total metadata: ${offset + size} bytes.`);
         return offset + size;
       }
-      
+
       if (size <= 0 || size > 100 * 1024 * 1024) break; // 防止死循环或异常大小
       offset += size;
     }
@@ -209,7 +209,7 @@ async function videoDataUrlFrameExtractor(dataUrl: string): Promise<string | nul
     video.muted = true;
     video.playsInline = true;
     video.autoplay = false;
-    
+
     // Style to ensure it's "visible" but not intrusive
     video.style.position = 'fixed';
     video.style.top = '0';
@@ -219,7 +219,7 @@ async function videoDataUrlFrameExtractor(dataUrl: string): Promise<string | nul
     video.style.opacity = '0.01';
     video.style.pointerEvents = 'none';
     video.style.zIndex = '-9999';
-    
+
     // Set a timeout to avoid hanging indefinitely
     const timeoutId = setTimeout(() => {
       console.warn("[page] Video frame capture from DataURL timed out after 15s");
@@ -251,10 +251,10 @@ async function videoDataUrlFrameExtractor(dataUrl: string): Promise<string | nul
         const height = video.videoHeight || 360;
         canvas.width = width;
         canvas.height = height;
-        
+
         const ctx = canvas.getContext('2d');
         if (!ctx) throw new Error("Could not get 2d context");
-        
+
         ctx.drawImage(video, 0, 0, width, height);
         const resultUrl = canvas.toDataURL('image/jpeg', 0.9);
         console.log("[page] Successfully captured frame, DataURL length:", resultUrl.length);
@@ -286,7 +286,7 @@ async function videoDataUrlFrameExtractor(dataUrl: string): Promise<string | nul
       cleanup();
       resolve(null);
     };
-    
+
     video.src = dataUrl;
     video.load();
     document.body.appendChild(video); // Some browsers need the element in the DOM to load correctly
@@ -381,12 +381,6 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
     if (totalItems === 0) {
       logger.info("[Background] All items already have thumbnails, skipping fetch");
       browser.runtime.sendMessage({ type: messageId.getThumbfinished });
-      browser.notifications.create({
-        type: "basic",
-        iconUrl: "/icon/128.png",
-        title: "Bookmark Viewer",
-        message: "所有书签封面已存在，无需重复获取。",
-      });
       return;
     }
 
@@ -448,7 +442,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
             const totalAttempts = maxRetries + 1;
             const chunkSizeBytes = Math.floor(chunkSizeMB * 1024 * 1024);
             const fetchedChunks: Blob[] = [];
-            
+
             // 尝试探测元数据大小
             const metadataEnd = await detectMp4MetadataEnd(targetUrl);
             let bytesFetched = 0;
@@ -456,24 +450,24 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
             for (let i = 0; i < totalAttempts; i++) {
               let start = bytesFetched;
               let end = (i + 1) * chunkSizeBytes - 1;
-              
+
               // 如果探测到了元数据且第一次请求太小，直接扩充到元数据末尾+一点冗余
               if (i === 0 && metadataEnd && end < metadataEnd + 256 * 1024) {
-                 end = metadataEnd + 256 * 1024; // 元数据 + 256KB 初始缓冲
-                 logger.info(`[Background] Smart Initial Fetch: Metadata ends at ${metadataEnd}, requesting up to ${end}`);
+                end = metadataEnd + 256 * 1024; // 元数据 + 256KB 初始缓冲
+                logger.info(`[Background] Smart Initial Fetch: Metadata ends at ${metadataEnd}, requesting up to ${end}`);
               } else if (start > end) {
-                 // 如果探测扩充后，下一次循环的 end 还没赶上，则平移到探测末尾开始
-                 end = start + chunkSizeBytes - 1;
+                // 如果探测扩充后，下一次循环的 end 还没赶上，则平移到探测末尾开始
+                end = start + chunkSizeBytes - 1;
               }
 
               logger.info(`[Background] Attempt ${i + 1}/${totalAttempts} to fetch video chunk for ${pageUrl} (Range: ${start}-${end})`);
-              
+
               const chunk = await fetchVideoChunk(targetUrl, start, end);
-              
+
               if (chunk) {
                 fetchedChunks.push(chunk);
                 bytesFetched = end + 1; // 更新已获取的字节边界
-                
+
                 const combinedBlob = new Blob(fetchedChunks);
                 const videoDataUrl = await blobToDataUrl(combinedBlob);
 
@@ -490,7 +484,7 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
                   break;
                 }
               }
-              
+
               if (i < totalAttempts - 1) {
                 logger.warn(`[Background] Frame extraction failed on attempt ${i + 1}, retrying with larger range...`);
               } else {
@@ -679,30 +673,8 @@ browser.runtime.onMessage.addListener(async (message, sender) => {
 
     if (isFetchStopped) {
       browser.runtime.sendMessage({ type: messageId.fetchStopped });
-      browser.notifications.create({
-        type: "basic",
-        iconUrl: "/icon/128.png",
-        title: "Bookmark Viewer",
-        message: "获取任务已停止",
-      });
     } else {
       browser.runtime.sendMessage({ type: messageId.getThumbfinished });
-      
-      let statusMsg = "";
-      if (successCount === totalItems) {
-        statusMsg = `获取完成！共成功获取了 ${successCount} 个封面。`;
-      } else if (successCount === 0) {
-        statusMsg = `获取失败！无法获取所选的 ${totalItems} 个书签封面。`;
-      } else {
-        statusMsg = `获取结束。成功: ${successCount}，失败: ${totalItems - successCount}。`;
-      }
-
-      browser.notifications.create({
-        type: "basic",
-        iconUrl: "/icon/128.png",
-        title: successCount > 0 ? "获取成功" : "获取失败",
-        message: statusMsg,
-      });
     }
   }
 });
@@ -721,7 +693,7 @@ async function getMatchedConfigForUrl(url: string): Promise<{ config: FetchConfi
     for (const config of configs) {
       let configHostname = config.hostname;
       if (configHostname && configHostname.includes("://")) {
-        try { configHostname = new URL(configHostname).hostname; } catch (_) {}
+        try { configHostname = new URL(configHostname).hostname; } catch (_) { }
       }
 
       // Use includes for more flexible matching, like the options page
@@ -769,7 +741,7 @@ async function setBadgeForTab(tabId: number, status: "has-cover" | "no-cover" | 
         await browser.action.setBadgeText({ text: "", tabId });
         break;
     }
-  } catch (_) {}
+  } catch (_) { }
 }
 
 // Process a single page-mode item using an EXISTING tab (Feature 2: reuse the user's open tab)
@@ -873,43 +845,21 @@ async function processExistingTabForCover(
             progress: 1,
             total: 1,
           });
-        } catch (_) {}
-        
-        showOnPageNotification(tabId, "封面获取成功！", "success", pageUrl);
+        } catch (_) { }
+
         return true;
       }
     }
-    
-    showOnPageNotification(tabId, "封面获取失败", "error", pageUrl);
+
     return false;
   } catch (err) {
     logger.error("[Background] processExistingTabForCover failed", err);
-    showOnPageNotification(tabId, "封面获取出错", "error", pageUrl);
   } finally {
     activeAutoFetchTasks.delete(pageUrl);
   }
   return false;
 }
 
-function showOnPageNotification(tabId: number, text: string, status: "loading" | "success" | "error", url?: string) {
-  const trySend = () => {
-    browser.tabs.sendMessage(tabId, {
-      type: "show-notification",
-      text,
-      status,
-      url
-    }).catch(() => {
-       // Ignore - content script might not be ready
-    });
-  };
-
-  trySend();
-  // For 'loading' status, retry once after a delay in case the page was just refreshing/loading
-  if (status === "loading") {
-    setTimeout(trySend, 1500);
-    setTimeout(trySend, 4000); // Second retry for slow pages
-  }
-}
 
 async function isUrlBookmarked(url: string): Promise<boolean> {
   try {
@@ -968,7 +918,7 @@ async function fastFetchCoverForUrl(pageUrl: string, config: FetchConfig): Promi
       if (success) {
         try {
           browser.runtime.sendMessage({ type: messageId.singleThumbFinished, pageUrl, progress: 1, total: 1 });
-        } catch (_) {}
+        } catch (_) { }
         return true;
       }
     }
@@ -1006,8 +956,8 @@ export default defineBackground(() => {
     const url = tab.url;
     // Ignore extension pages and browser-internal URLs
     if (url.startsWith("chrome://") || url.startsWith("moz-extension://") ||
-        url.startsWith("chrome-extension://") || url.startsWith("about:") ||
-        url.startsWith("file://")) {
+      url.startsWith("chrome-extension://") || url.startsWith("about:") ||
+      url.startsWith("file://")) {
       setBadgeForTab(tabId, "clear");
       return;
     }
@@ -1042,23 +992,14 @@ export default defineBackground(() => {
     // Show fetching badge and auto-fetch using the active tab
     setBadgeForTab(tabId, "fetching");
     logger.info(`[Background] Auto-fetching cover for matched page: ${url} (mode: ${config.mode})`);
-    
+
     activeAutoFetchTasks.set(url, "fetching");
-
-    showOnPageNotification(tabId, "正在自动获取封面...", "loading", url);
-
-    browser.notifications.create({
-      type: "basic",
-      iconUrl: "/icon/128.png",
-      title: "正在获取封面",
-      message: `检测到匹配页面，正在尝试获取封面...`,
-    });
 
     let success = false;
     if (config.mode === "page") {
       // Reuse the existing tab the user has open
       success = await processExistingTabForCover(tabId, url, config);
-    } else    if (config.mode === "fast") {
+    } else if (config.mode === "fast") {
       success = await fastFetchCoverForUrl(url, config);
       activeAutoFetchTasks.set(url, success ? "success" : "error");
       setTimeout(() => activeAutoFetchTasks.delete(url), 5000);
@@ -1066,14 +1007,6 @@ export default defineBackground(() => {
 
     if (config.mode === "fast") {
       setBadgeForTab(tabId, success ? "has-cover" : "no-cover");
-      if (success) {
-        browser.notifications.create({
-          type: "basic",
-          iconUrl: "/icon/48.png",
-          title: "封面获取成功",
-          message: `已自动获取 ${url} 的封面。`,
-        });
-      }
     }
   });
 
@@ -1092,6 +1025,13 @@ export default defineBackground(() => {
 
     const matched = await getMatchedConfigForUrl(url);
     if (!matched) return;
+
+    // Check if auto-fetch on bookmark is enabled
+    const settingsRaw = await browser.storage.local.get(SETTINGS_KEY);
+    const settings: Setting = settingsRaw[SETTINGS_KEY] as Setting;
+    if (settings && settings.autoFetchOnBookmark === false) {
+      return;
+    }
 
     // Find if any tab has this URL open and is the active tab
     const tabs = await browser.tabs.query({ url });
@@ -1113,17 +1053,17 @@ export default defineBackground(() => {
 
         setBadgeForTab(tab.id, "fetching");
         activeAutoFetchTasks.set(url, "fetching");
-        showOnPageNotification(tab.id, "检测到新收藏，正在获取封面...", "loading", url);
+        // TODO: Send notify after saving bookmarks.
 
         if (matched.config.mode === "page") {
           processExistingTabForCover(tab.id, url, matched.config).then(success => {
-             setBadgeForTab(tab.id!, success ? "has-cover" : "no-cover");
+            setBadgeForTab(tab.id!, success ? "has-cover" : "no-cover");
           });
         } else {
           fastFetchCoverForUrl(url, matched.config).then(success => {
-             setBadgeForTab(tab.id!, success ? "has-cover" : "no-cover");
-             activeAutoFetchTasks.set(url, success ? "success" : "error");
-             setTimeout(() => activeAutoFetchTasks.delete(url), 5000);
+            setBadgeForTab(tab.id!, success ? "has-cover" : "no-cover");
+            activeAutoFetchTasks.set(url, success ? "success" : "error");
+            setTimeout(() => activeAutoFetchTasks.delete(url), 5000);
           });
         }
       }

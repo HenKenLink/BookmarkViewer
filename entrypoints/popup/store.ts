@@ -28,6 +28,7 @@ type PopupStoreState = {
 
 type PopupStoreAction = {
   getSetting: () => Promise<void>;
+  setSetting: (newSetting: Partial<Setting>) => Promise<void>;
   loadBookmarkTree: () => Promise<void>;
   loadFetchConfig: () => Promise<void>;
   matchBookmarks: () => Promise<void>;
@@ -52,6 +53,12 @@ const actionSlice: StateCreator<PopupStore, [], [], PopupStoreAction> = (set, ge
         expandedFolderIds: storedSetting.expandedFolderIds ?? [],
       });
     }
+  },
+
+  setSetting: async (newSetting) => {
+    const combinedSetting = { ...get().setting, ...newSetting };
+    set({ setting: combinedSetting });
+    await browser.storage.local.set({ [SETTINGS_KEY]: combinedSetting });
   },
 
   loadBookmarkTree: async () => {
@@ -146,6 +153,10 @@ export const usePopupStore = create<PopupStore>()((...action) => ({
     videoFetchChunkSize: 1.5,
     videoFetchMaxRetries: 3,
     showActiveTabBanner: true,
+    sortBy: "dateAdded",
+    sortOrder: "desc",
+    foldersPosition: "top",
+    urlFilters: [],
   } as unknown as Setting,
   bookmarkTree: null,
   bookmarkList: [],

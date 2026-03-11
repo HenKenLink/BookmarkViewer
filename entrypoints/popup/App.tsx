@@ -24,6 +24,10 @@ import { PopupBookmarkCard } from "./Components/PopupBookmarkCard";
 import { usePopupStore } from "./store";
 import { BookmarkTreeNode, FetchConfig } from "@/entrypoints/global/types";
 import { messageId } from "@/entrypoints/global/message";
+import { SortControls } from "@/entrypoints/options/Components/SortControls";
+import { UrlFilterControls } from "@/entrypoints/options/Components/UrlFilterControls";
+import { FavoriteFoldersBar } from "@/entrypoints/options/Components/FavoriteFoldersBar";
+import { sortBookmarks, filterByUrlDomains } from "@/entrypoints/global/sortFilterUtils";
 
 const lightTheme = createTheme({
   palette: {
@@ -72,6 +76,7 @@ function PopupApp() {
   const sidebarOpen = usePopupStore((s) => s.sidebarOpen);
   const setSidebarOpen = usePopupStore((s) => s.setSidebarOpen);
   const updateLoadedImageMap = usePopupStore((s) => s.updateLoadedImageMap);
+  const setSetting = usePopupStore((s) => s.setSetting);
 
   const [activeTabStatus, setActiveTabStatus] = useState<{
     url: string;
@@ -211,29 +216,52 @@ function PopupApp() {
 
   const displayItems = useMemo(() => {
     const query = searchQuery.toLowerCase();
+    let items: BookmarkTreeNode[] = [];
+
     if (query) {
-      return matchedBookmarks.filter(
+      items = matchedBookmarks.filter(
         (bk) =>
           bk.title.toLowerCase().includes(query) ||
           (bk.url || "").toLowerCase().includes(query)
       );
-    }
-    if (selectedFolderId === "all") return matchedBookmarks;
-
-    const currentFolder = bookmarkMap[selectedFolderId];
-    if (!currentFolder || !currentFolder.children) return [];
-
-    const items: BookmarkTreeNode[] = [];
-    currentFolder.children.forEach((child) => {
-      if (child.url) {
-        if (matchedBookmarks.some((mb) => mb.id === child.id)) {
-          items.push(child);
-        }
+    } else if (selectedFolderId === "all") {
+      items = [...matchedBookmarks];
+    } else {
+      const currentFolder = bookmarkMap[selectedFolderId];
+      if (currentFolder && currentFolder.children) {
+        items = [];
+        currentFolder.children.forEach((child) => {
+          if (child.url) {
+            if (matchedBookmarks.some((mb) => mb.id === child.id)) {
+              items.push(child);
+            }
+          }
+        });
       }
-      // We could also show subfolders but let's keep it simple for the popup
-    });
+    }
+
+    // Apply URL filtering
+    items = filterByUrlDomains(items, setting.urlFilters || []);
+
+    // Apply Sorting
+    items = sortBookmarks(
+      items,
+      setting.sortBy || "dateAdded",
+      setting.sortOrder || "desc",
+      setting.foldersPosition || "top"
+    );
+
     return items;
-  }, [selectedFolderId, matchedBookmarks, searchQuery, bookmarkMap]);
+  }, [
+    selectedFolderId,
+    matchedBookmarks,
+    searchQuery,
+    bookmarkMap,
+    setting.urlFilters,
+    setting.sortBy,
+    setting.sortOrder,
+    setting.foldersPosition
+  ]);
 
   const openOptionsPage = () => {
     browser.runtime.openOptionsPage();
@@ -356,11 +384,25 @@ function PopupApp() {
                       <SearchIcon sx={{ fontSize: 16, color: "text.secondary" }} />
                     </InputAdornment>
                   ),
-                  endAdornment: searchQuery && (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setSearchQuery("")} edge="end">
-                        <ClearIcon sx={{ fontSize: 14 }} />
-                      </IconButton>
+                  endAdornment: (
+                    <InputAdornment position="end" sx={{ gap: 0 }}>
+                      {searchQuery && (
+                        <IconButton size="small" onClick={() => setSearchQuery("")} edge={false}>
+                          <ClearIcon sx={{ fontSize: 14 }} />
+                        </IconButton>
+                      )}
+                      <UrlFilterControls
+                        urlFilters={setting.urlFilters || []}
+                        onChange={(filters) => setSetting({ urlFilters: filters })}
+                        size="small"
+                      />
+                      <SortControls
+                        sortBy={setting.sortBy || "dateAdded"}
+                        sortOrder={setting.sortOrder || "desc"}
+                        foldersPosition={setting.foldersPosition || "top"}
+                        onChange={(updates) => setSetting(updates)}
+                        size="small"
+                      />
                     </InputAdornment>
                   ),
                   sx: { fontSize: "0.8rem", py: 0 },
@@ -388,7 +430,6 @@ function PopupApp() {
               py: 0.5,
               display: "flex",
               alignItems: "center",
-              justifyContent: "space-between",
               borderBottom: "1px solid",
               borderColor: "divider",
               flexShrink: 0,
@@ -405,11 +446,23 @@ function PopupApp() {
             sx={{
               flex: 1,
               overflowY: "auto",
-              px: 1.5,
-              py: 1,
+              pt: 0.5,
             }}
           >
-            {isLoadingBookmarks && (
+            {setting.showFavoriteFolders && setting.favoriteFolderIds?.length > 0 && (
+              <FavoriteFoldersBar
+                favoriteFolderIds={setting.favoriteFolderIds}
+                bookmarkMap={bookmarkMap}
+                selectedFolderId={selectedFolderId}
+                onSelect={setSelectedFolderId}
+                aliases={setting.favoriteFolderAliases || {}}
+                chipSize="small"
+                sx={{ px: 1, mb: 1 }}
+              />
+            )}
+
+            <Box sx={{ px: 1.5, pb: 1 }}>
+              {isLoadingBookmarks && (
               <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", pt: 6 }}>
                 <CircularProgress size={30} />
               </Box>
@@ -450,6 +503,7 @@ function PopupApp() {
                   url={bk.url as string}
                 />
               ))}
+            </Box>
           </Box>
         </Box>
       </Box>
