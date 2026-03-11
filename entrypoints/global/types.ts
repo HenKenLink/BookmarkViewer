@@ -70,4 +70,5 @@ export type Setting = {
   sortOrder: "asc" | "desc";
   foldersPosition: "top" | "bottom" | "mixed";
   urlFilters: string[];
+  clickAction: "popup" | "options";
 };

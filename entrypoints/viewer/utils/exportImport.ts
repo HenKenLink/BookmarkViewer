@@ -8,45 +8,6 @@ interface ManifestItem {
     bookmarkUrl: string;
 }
 
-export const exportSettings = async () => {
-    const data = await browser.storage.local.get([SETTINGS_KEY, CONFIGS_KEY]);
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    saveAs(blob, `bookmark-settings-${new Date().toISOString().split('T')[0]}.json`);
-};
-
-export const exportCovers = async () => {
-    const zip = new JSZip();
-    const manifest: ManifestItem[] = [];
-    const images = zip.folder("images");
-
-    const allData = await browser.storage.local.get(null);
-    let count = 0;
-
-    for (const [key, value] of Object.entries(allData)) {
-        if (key === SETTINGS_KEY || key === CONFIGS_KEY) continue;
-        // Value is stored as number[] (serialized Uint8Array) in storage
-        if (Array.isArray(value) && value.length > 0) {
-            const filename = `${count}.jpg`;
-            const u8 = new Uint8Array(value as number[]);
-
-            if (images) {
-                images.file(filename, u8);
-                manifest.push({ filename, bookmarkUrl: key });
-                count++;
-            }
-        }
-    }
-
-    if (count === 0) {
-        alert("No covers found to export.");
-        return;
-    }
-
-    zip.file("manifest.json", JSON.stringify(manifest, null, 2));
-    const content = await zip.generateAsync({ type: "blob" });
-    saveAs(content, `bookmark-covers-${new Date().toISOString().split('T')[0]}.zip`);
-};
-
 export const exportAll = async () => {
     const zip = new JSZip();
     const manifest: ManifestItem[] = [];

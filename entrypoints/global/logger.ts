@@ -1,5 +1,5 @@
 import { LogLevel, Setting } from "./types";
-import { SETTINGS_KEY } from "../options/consts";
+import { SETTINGS_KEY } from "../viewer/consts";
 
 export type LogEntry = {
     timestamp: number;

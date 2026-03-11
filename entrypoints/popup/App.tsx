@@ -24,9 +24,9 @@ import { PopupBookmarkCard } from "./Components/PopupBookmarkCard";
 import { usePopupStore } from "./store";
 import { BookmarkTreeNode, FetchConfig } from "@/entrypoints/global/types";
 import { messageId } from "@/entrypoints/global/message";
-import { SortControls } from "@/entrypoints/options/Components/SortControls";
-import { UrlFilterControls } from "@/entrypoints/options/Components/UrlFilterControls";
-import { FavoriteFoldersBar } from "@/entrypoints/options/Components/FavoriteFoldersBar";
+import { SortControls } from "@/entrypoints/viewer/Components/SortControls";
+import { UrlFilterControls } from "@/entrypoints/viewer/Components/UrlFilterControls";
+import { FavoriteFoldersBar } from "@/entrypoints/viewer/Components/FavoriteFoldersBar";
 import { sortBookmarks, filterByUrlDomains } from "@/entrypoints/global/sortFilterUtils";
 
 const lightTheme = createTheme({
@@ -263,8 +263,14 @@ function PopupApp() {
     setting.foldersPosition
   ]);
 
-  const openOptionsPage = () => {
-    browser.runtime.openOptionsPage();
+  const openOptionsPage = async () => {
+    const url = browser.runtime.getURL("/viewer.html");
+    const tabs = await browser.tabs.query({ url });
+    if (tabs.length > 0 && tabs[0].id) {
+      await browser.tabs.update(tabs[0].id, { active: true });
+    } else {
+      await browser.tabs.create({ url });
+    }
   };
 
   return (

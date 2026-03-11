@@ -5,7 +5,7 @@ import {
   FetchConfig,
   LoadedImageMap,
 } from "../global/types";
-import { filterBookmarkByMatchPattern, checkBookmarksLoadStatus } from "@/entrypoints/options/utils";
+import { filterBookmarkByMatchPattern, checkBookmarksLoadStatus } from "@/entrypoints/viewer/utils";
 
 const SETTINGS_KEY = "__SETTINGS__";
 const CONFIGS_KEY = "__CONFIGS__";

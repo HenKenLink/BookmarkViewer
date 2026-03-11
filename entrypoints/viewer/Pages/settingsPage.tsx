@@ -21,7 +21,7 @@ import {
     TextField,
 } from "@mui/material";
 import { useStore } from "../store";
-import { exportAll, exportCovers, exportSettings, importFile } from "../utils/exportImport";
+import { exportAll, importFile } from "../utils/exportImport";
 import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import DownloadIcon from "@mui/icons-material/Download";
@@ -34,8 +34,6 @@ export function SettingsPage() {
     const bookmarkMap = useStore((state) => state.bookmarkMap);
     const clearAllCovers = useStore((state) => state.clearAllCovers);
 
-    const [exportSettingsChecked, setExportSettingsChecked] = useState(true);
-    const [exportCoversChecked, setExportCoversChecked] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const toggleAnimations = async () => {
@@ -56,15 +54,7 @@ export function SettingsPage() {
     };
 
     const handleExport = async () => {
-        if (exportSettingsChecked && exportCoversChecked) {
-            await exportAll();
-        } else if (exportSettingsChecked) {
-            await exportSettings();
-        } else if (exportCoversChecked) {
-            await exportCovers();
-        } else {
-            alert("Please select at least one item to export.");
-        }
+        await exportAll();
     };
 
     const handleImportClick = () => {
@@ -137,6 +127,24 @@ export function SettingsPage() {
                                 checked={!!setting.showFavoriteFolders}
                                 onChange={toggleShowFavoriteFolders}
                             />
+                        </ListItemSecondaryAction>
+                    </ListItem>
+                    <Divider component="li" />
+                    <ListItem>
+                        <ListItemText
+                            primary="Extension Icon Click Action"
+                            secondary="Choose what happens when you click the extension icon"
+                        />
+                        <ListItemSecondaryAction>
+                            <Select
+                                value={setting.clickAction || 'popup'}
+                                onChange={async (e) => await setSetting({ clickAction: e.target.value as "popup" | "options" })}
+                                size="small"
+                                sx={{ minWidth: 120 }}
+                            >
+                                <MenuItem value="popup">Open Popup</MenuItem>
+                                <MenuItem value="options">Open Viewer/Settings</MenuItem>
+                            </Select>
                         </ListItemSecondaryAction>
                     </ListItem>
                 </List>
@@ -349,35 +357,14 @@ export function SettingsPage() {
                                 Export Data
                             </Typography>
                             <Typography variant="body2" color="text.secondary" paragraph>
-                                Download a backup of your settings and cached covers.
+                                Download a backup of your Settings, Fetch Configs, and all cached Cover Images in a single ZIP file.
                             </Typography>
-                            <Stack direction="row" spacing={3} alignItems="center" sx={{ mb: 2 }}>
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            checked={exportSettingsChecked}
-                                            onChange={(e) => setExportSettingsChecked(e.target.checked)}
-                                        />
-                                    }
-                                    label="Settings & Configs"
-                                />
-                                <FormControlLabel
-                                    control={
-                                        <Checkbox
-                                            checked={exportCoversChecked}
-                                            onChange={(e) => setExportCoversChecked(e.target.checked)}
-                                        />
-                                    }
-                                    label="Cover Images"
-                                />
-                            </Stack>
                             <Button
                                 variant="outlined"
                                 startIcon={<DownloadIcon />}
                                 onClick={handleExport}
-                                disabled={!exportSettingsChecked && !exportCoversChecked}
                             >
-                                Export Backup
+                                Export Full Backup
                             </Button>
                         </Box>
 

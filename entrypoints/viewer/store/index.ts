@@ -437,6 +437,7 @@ export const useStore = create<Store>()((...action) => ({
     sortOrder: "desc",
     foldersPosition: "top",
     urlFilters: [],
+    clickAction: "popup",
   } as unknown as Setting,
   bookmarkTree: null as BookmarkTreeNode | null,
   bookmarkList: [] as BookmarkTreeNode[],

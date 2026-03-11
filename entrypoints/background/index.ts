@@ -5,7 +5,7 @@ import { FetchTask, FetchConfig } from "../global/types";
 import { waitForTabLoad } from "../global/globalUtils";
 
 import { SelectorType, Setting } from "../global/types";
-import { SETTINGS_KEY } from "../options/consts";
+import { SETTINGS_KEY } from "../viewer/consts";
 
 type Thumb = {
   pageUrl: string;
@@ -14,7 +14,7 @@ type Thumb = {
 
 const openUI = async () => {
   // @ts-ignore
-  const url = browser.runtime.getURL("options.html");
+  const url = browser.runtime.getURL("/viewer.html");
   const tabs = (await browser.tabs.query({}))
     .map((tab) => {
       tab.url = tab.url!.split("#")[0];
@@ -723,22 +723,23 @@ async function hasCoverForUrl(url: string): Promise<boolean> {
 
 async function setBadgeForTab(tabId: number, status: "has-cover" | "no-cover" | "fetching" | "clear") {
   try {
-    if (!browser.action) return;
+    const actionAPI = browser.action || browser.browserAction;
+    if (!actionAPI) return;
     switch (status) {
       case "has-cover":
-        await browser.action.setBadgeText({ text: "✓", tabId });
-        await browser.action.setBadgeBackgroundColor({ color: "#4caf50", tabId });
+        await actionAPI.setBadgeText({ text: "✓", tabId });
+        await actionAPI.setBadgeBackgroundColor({ color: "#4caf50", tabId });
         break;
       case "no-cover":
-        await browser.action.setBadgeText({ text: "!", tabId });
-        await browser.action.setBadgeBackgroundColor({ color: "#ff9800", tabId });
+        await actionAPI.setBadgeText({ text: "!", tabId });
+        await actionAPI.setBadgeBackgroundColor({ color: "#ff9800", tabId });
         break;
       case "fetching":
-        await browser.action.setBadgeText({ text: "…", tabId });
-        await browser.action.setBadgeBackgroundColor({ color: "#2196f3", tabId });
+        await actionAPI.setBadgeText({ text: "…", tabId });
+        await actionAPI.setBadgeBackgroundColor({ color: "#2196f3", tabId });
         break;
       case "clear":
-        await browser.action.setBadgeText({ text: "", tabId });
+        await actionAPI.setBadgeText({ text: "", tabId });
         break;
     }
   } catch (_) { }
@@ -941,12 +942,7 @@ export default defineBackground(() => {
     }
   })();
 
-  if (__CHROME__) {
-    // onClicked only fires when there's no default_popup; kept as fallback
-    browser.action.onClicked.addListener(openUI);
-  } else {
-    browser.browserAction.onClicked.addListener(openUI);
-  }
+  // Legacy Chrome handling removed; action/browserAction mapping handles this below.
 
   // Feature 2: Listen for tab navigation to matching pages
   browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
@@ -1069,5 +1065,49 @@ export default defineBackground(() => {
       }
     }
   });
+ 
+  // Dynamic UI Setup based on settings
+  async function setupUI() {
+    const settingsRaw = await browser.storage.local.get(SETTINGS_KEY);
+    const settings: Setting = settingsRaw[SETTINGS_KEY] as Setting;
+    const clickAction = settings?.clickAction || "popup";
+
+    const actionAPI = browser.action || browser.browserAction;
+
+    // 1. Configure Extension Icon Click Behavior
+    if (actionAPI) {
+      if (clickAction === "options") {
+        await actionAPI.setPopup({ popup: "" });
+      } else {
+        await actionAPI.setPopup({ popup: "popup.html" });
+      }
+    }
+
+  }
+
+  // Initial setup
+  browser.runtime.onInstalled.addListener(() => {
+    setupUI();
+  });
+
+  browser.runtime.onStartup.addListener(() => {
+    setupUI();
+  });
+
+  // Handle Action Click (only fires if popup is "")
+  const actionAPI = browser.action || browser.browserAction;
+  if (actionAPI) {
+    actionAPI.onClicked.addListener(() => {
+      openUI();
+    });
+  }
+
+  // Listen for settings changes to update UI immediately
+  browser.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes[SETTINGS_KEY]) {
+      setupUI();
+    }
+  });
+
 });
 
