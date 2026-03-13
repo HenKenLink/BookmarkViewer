@@ -9,47 +9,28 @@ export function filterBookmarkByMatchPattern(
   bookmarkList: BookmarkTreeNode[],
   matchPattern: MatchPattern
 ): BookmarkTreeNode[] {
-  let hostname = matchPattern.hostname;
-  // If hostname includes protocol, extract the real hostname
-  if (hostname.includes("://")) {
+  let targetHostname = matchPattern.hostname;
+  if (targetHostname.includes("://")) {
     try {
-      hostname = new URL(hostname).hostname;
+      targetHostname = new URL(targetHostname).hostname;
+    } catch (e) {}
+  }
+  
+  const regex = matchPattern.regexPattern ? new RegExp(matchPattern.regexPattern) : null;
+
+  return bookmarkList.filter((bk) => {
+    const url = bk.url;
+    if (!url) return false;
+
+    try {
+      const urlObj = new URL(url);
+      if (urlObj.hostname !== targetHostname) return false;
+      if (regex && !regex.test(url)) return false;
+      return true;
     } catch (e) {
-      // If URL parsing fails, use the original string
+      return false;
     }
-  }
-  const regexPattern = matchPattern.regexPattern;
-
-  const hostMatch = (bkList: BookmarkTreeNode[]) => {
-    return bkList.filter((bk) => {
-      const url = bk.url;
-      if (url) {
-        const urlHostname = new URL(url).hostname;
-        return urlHostname === hostname;
-      } else {
-        return false;
-      }
-    });
-  };
-
-  const regMatch = (bkList: BookmarkTreeNode[]) => {
-    return bkList.filter((bk) => {
-      const url = bk.url;
-
-      if (url) {
-        const regex = new RegExp(regexPattern as string);
-        return regex.test(url);
-      } else {
-        return false;
-      }
-    });
-  };
-
-  const matchRes: BookmarkTreeNode[] = hostMatch(bookmarkList);
-  if (regexPattern) {
-    return regMatch(matchRes);
-  }
-  return matchRes;
+  });
 }
 
 // 检查书签的封面加载状态，返回 BookmarkFetchItem 列表

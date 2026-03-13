@@ -67,45 +67,44 @@ function FetchProgress({ isFetching, progress, total, onStop }: { isFetching: bo
 }
 
 export function ViewerPage() {
-  const {
-    loadFetchConfig,
-    bookmarkList,
-    matchBookmarks,
-    matchedBookmarks,
-    fetchTaskList,
-    fetchConfigList,
-    isFetching,
-    fetchProgress,
-    fetchTotal,
-    setFetchStatus,
-    updateFetchProgress,
-    loadSingleThumb,
-    stopFetching,
-    selectedFolderId,
-    setSelectedFolderId,
-    bookmarkMap,
-    clearSelection,
-    forceFetchThumbnails,
-    downloadMultipleThumbnailsAction,
-    isLoadingBookmarks,
-    setLoadingBookmarks,
-    isSelectionMode,
-    setIsSelectionMode,
-    setting,
-    setSetting,
-    sidebarOpen,
-    setSidebarOpen,
-    bookmarkTree,
-    expandedFolderIds,
-    setExpandedFolderIds,
-    toggleFavoriteFolder,
-    setFavoriteFolderAlias,
-    getAllBookmarksInFolderAction,
-  } = useStore();
+  const loadFetchConfig = useStore((s) => s.loadFetchConfig);
+  const bookmarkList = useStore((s) => s.bookmarkList);
+  const matchBookmarks = useStore((s) => s.matchBookmarks);
+  const matchedBookmarks = useStore((s) => s.matchedBookmarks);
+  const fetchTaskList = useStore((s) => s.fetchTaskList);
+  const isFetching = useStore((s) => s.isFetching);
+  const fetchProgress = useStore((s) => s.fetchProgress);
+  const fetchTotal = useStore((s) => s.fetchTotal);
+  const setFetchStatus = useStore((s) => s.setFetchStatus);
+  const updateFetchProgress = useStore((s) => s.updateFetchProgress);
+  const loadSingleThumb = useStore((s) => s.loadSingleThumb);
+  const stopFetching = useStore((s) => s.stopFetching);
+  const selectedFolderId = useStore((s) => s.selectedFolderId);
+  const setSelectedFolderId = useStore((s) => s.setSelectedFolderId);
+  const bookmarkMap = useStore((s) => s.bookmarkMap);
+  const forceFetchThumbnails = useStore((s) => s.forceFetchThumbnails);
+  const isLoadingBookmarks = useStore((s) => s.isLoadingBookmarks);
+  const setLoadingBookmarks = useStore((s) => s.setLoadingBookmarks);
+  const isSelectionMode = useStore((s) => s.isSelectionMode);
+  const setIsSelectionMode = useStore((s) => s.setIsSelectionMode);
+  const setting = useStore((s) => s.setting);
+  const setSetting = useStore((s) => s.setSetting);
+  const sidebarOpen = useStore((s) => s.sidebarOpen);
+  const setSidebarOpen = useStore((s) => s.setSidebarOpen);
+  const bookmarkTree = useStore((s) => s.bookmarkTree);
+  const expandedFolderIds = useStore((s) => s.expandedFolderIds);
+  const setExpandedFolderIds = useStore((s) => s.setExpandedFolderIds);
+  const toggleFavoriteFolder = useStore((s) => s.toggleFavoriteFolder);
+  const setFavoriteFolderAlias = useStore((s) => s.setFavoriteFolderAlias);
+  const getAllBookmarksInFolderAction = useStore((s) => s.getAllBookmarksInFolderAction);
+  const clearSelection = useStore((s) => s.clearSelection);
+  const downloadMultipleThumbnailsAction = useStore((s) => s.downloadMultipleThumbnailsAction);
+  const fetchConfigList = useStore((s) => s.fetchConfigList);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
+  const [renderedLimit, setRenderedLimit] = useState(30);
 
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
@@ -118,6 +117,30 @@ export function ViewerPage() {
     searchQuery,
     setting
   );
+
+  // Reset limit when folder or search changes
+  useEffect(() => {
+    setRenderedLimit(30);
+  }, [selectedFolderId, searchQuery]);
+
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && renderedLimit < displayItems.length) {
+          setRenderedLimit((prev) => prev + 30);
+        }
+      },
+      { threshold: 0.1, rootMargin: "400px" }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [displayItems.length, renderedLimit]);
 
   const startMatchBookmarks = async () => {
     const hasItems = useStore.getState().matchedBookmarks.length > 0;
@@ -138,15 +161,20 @@ export function ViewerPage() {
     loadConfig();
     browser.runtime.onMessage.addListener(onMessageListener);
 
-    return () => {
+    // Global cleanup on window unload to prevent memory leaks
+    const handleUnload = () => {
       const currentMap = useStore.getState().loadedImageMap;
       Object.values(currentMap).forEach((blobUrl) => {
         if (blobUrl) {
           URL.revokeObjectURL(blobUrl);
         }
       });
-      useStore.getState().clearLoadedImageMap();
+    };
+    window.addEventListener("beforeunload", handleUnload);
+
+    return () => {
       browser.runtime.onMessage.removeListener(onMessageListener);
+      window.removeEventListener("beforeunload", handleUnload);
     };
   }, []);
 
@@ -486,7 +514,7 @@ export function ViewerPage() {
             </Box>
           )}
 
-          {!isLoadingBookmarks && displayItems.map((item) => {
+          {!isLoadingBookmarks && displayItems.slice(0, renderedLimit).map((item) => {
             const bk = item.data;
             if (item.type === 'folder') {
               return (
@@ -511,6 +539,13 @@ export function ViewerPage() {
               />
             );
           })}
+
+          {/* Sentinel for Infinite Scroll */}
+          {!isLoadingBookmarks && renderedLimit < displayItems.length && (
+            <Box ref={loadMoreRef} sx={{ py: 4, display: "flex", justifyContent: "center" }}>
+              <CircularProgress size={24} />
+            </Box>
+          )}
         </Box>
 
         <SelectionActionBar />

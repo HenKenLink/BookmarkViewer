@@ -52,6 +52,10 @@ export const actionSlice: StateCreator<Store, [], [], ViewerStoreAction> = (
   get
 ) => ({
   clearLoadedImageMap: () => {
+    const currentMap = get().loadedImageMap;
+    Object.values(currentMap).forEach((blobUrl) => {
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    });
     set(() => ({ loadedImageMap: {} }));
   },
   setFetchStatus: (isFetching, total) => {

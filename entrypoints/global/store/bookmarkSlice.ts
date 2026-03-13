@@ -127,33 +127,65 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
   matchBookmarks: async () => {
     const configList = get().fetchConfigList;
     const bookmarkList = get().bookmarkList;
-    if (!bookmarkList) return { matchedBookmarks: [], fetchTaskList: [] };
+    if (!bookmarkList || bookmarkList.length === 0) {
+      return { matchedBookmarks: [], fetchTaskList: [] };
+    }
+
+    // Optimization: Group configs by hostname for faster matching
+    const configsByHost: Record<string, FetchConfig[]> = {};
+    for (const config of configList) {
+      let host = config.hostname;
+      if (host.includes("://")) {
+        try { host = new URL(host).hostname; } catch (_) {}
+      }
+      if (!configsByHost[host]) configsByHost[host] = [];
+      configsByHost[host].push(config);
+    }
 
     const allMatchedBookmarks: BookmarkTreeNode[] = [];
     const fetchTaskList: FetchTask[] = [];
     const newLoadedImageMapAll: LoadedImageMap = {};
 
-    for (const config of (configList || [])) {
-      const { hostname, regexPattern } = config;
-      const matchedBookmarks = filterBookmarkByMatchPattern(bookmarkList, {
-        hostname,
-        ...(regexPattern ? { regexPattern } : {}),
-      });
-      allMatchedBookmarks.push(...matchedBookmarks);
+    // Group bookmarks by hostname once
+    const bookmarksByHost: Record<string, BookmarkTreeNode[]> = {};
+    for (const bk of bookmarkList) {
+      if (!bk.url) continue;
+      try {
+        const host = new URL(bk.url).hostname;
+        if (!bookmarksByHost[host]) bookmarksByHost[host] = [];
+        bookmarksByHost[host].push(bk);
+      } catch (_) {}
+    }
 
-      const { items, newLoadedImageMap } = await checkBookmarksLoadStatus(
-        matchedBookmarks,
-        config.id,
-        get().loadedImageMap
-      );
-      Object.assign(newLoadedImageMapAll, newLoadedImageMap);
+    // Process matched hosts
+    for (const host in configsByHost) {
+      const bksAtHost = bookmarksByHost[host];
+      if (!bksAtHost) continue;
 
-      const unloadedItems = items.filter((item) => !item.isLoaded);
-      if (unloadedItems.length > 0) {
-        fetchTaskList.push({
-          config,
-          items: unloadedItems,
-        });
+      for (const config of configsByHost[host]) {
+        const regex = config.regexPattern ? new RegExp(config.regexPattern) : null;
+        const matchedAtHost = regex 
+          ? bksAtHost.filter(bk => regex.test(bk.url!))
+          : bksAtHost;
+        
+        if (matchedAtHost.length === 0) continue;
+
+        allMatchedBookmarks.push(...matchedAtHost);
+
+        const { items, newLoadedImageMap } = await checkBookmarksLoadStatus(
+          matchedAtHost,
+          config.id,
+          get().loadedImageMap
+        );
+        Object.assign(newLoadedImageMapAll, newLoadedImageMap);
+
+        const unloadedItems = items.filter((item) => !item.isLoaded);
+        if (unloadedItems.length > 0) {
+          fetchTaskList.push({
+            config,
+            items: unloadedItems,
+          });
+        }
       }
     }
 
@@ -161,8 +193,16 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
       get().updateLoadedImageMap(newLoadedImageMapAll);
     }
 
+    // Only update state if matchedBookmarks actually changed to prevent excessive re-renders
+    const currentMatched = get().matchedBookmarks;
+    const isSameMatched = currentMatched.length === allMatchedBookmarks.length &&
+      currentMatched.every((bk, idx) => bk.id === allMatchedBookmarks[idx].id);
+
     const res = { matchedBookmarks: allMatchedBookmarks, fetchTaskList };
-    set(res);
+    if (!isSameMatched) {
+      set(res as any);
+    }
+    
     return res;
   },
 

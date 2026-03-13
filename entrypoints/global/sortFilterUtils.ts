@@ -38,6 +38,8 @@ export function filterByUrlDomains<T extends BookmarkTreeNode | { type: "bookmar
   urlFilters: string[]
 ): T[] {
   if (!urlFilters || urlFilters.length === 0) return items;
+  
+  const lowerFilters = urlFilters.map(f => f.toLowerCase());
 
   return items.filter((item) => {
     const node = "data" in item ? (item as any).data : item;
@@ -45,14 +47,15 @@ export function filterByUrlDomains<T extends BookmarkTreeNode | { type: "bookmar
     // Always keep folders if they are in the list (e.g., in Explorer view)
     if (!node.url) return true;
 
+    const lowerUrl = node.url.toLowerCase();
     try {
-      const url = new URL(node.url);
-      const hostname = url.hostname.toLowerCase();
-      // Match if the hostname contains any of the filter strings
-      return urlFilters.some(filter => hostname.includes(filter.toLowerCase()));
+      // optimization: check simple string includes before full URL parsing
+      if (lowerFilters.some(filter => lowerUrl.includes(filter))) {
+        return true;
+      }
+      return false;
     } catch {
-      // If URL parsing fails, check if the raw string matches
-      return urlFilters.some(filter => node.url!.toLowerCase().includes(filter.toLowerCase()));
+      return false;
     }
   });
 }

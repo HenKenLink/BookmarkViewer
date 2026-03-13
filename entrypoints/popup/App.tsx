@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Box,
   CssBaseline,
@@ -35,28 +35,72 @@ import { useDisplayBookmarks } from "../global/hooks/useDisplayBookmarks";
 const SIDEBAR_WIDTH = 200;
 
 function PopupApp() {
-  const {
-    getSetting,
-    loadBookmarkTree,
-    loadFetchConfig,
-    matchBookmarks,
-    setting,
-    matchedBookmarks,
-    bookmarkList,
-    fetchConfigList,
-    selectedFolderId,
-    setSelectedFolderId,
-    bookmarkMap,
+  const getSetting = usePopupStore((s) => s.getSetting);
+  const loadBookmarkTree = usePopupStore((s) => s.loadBookmarkTree);
+  const loadFetchConfig = usePopupStore((s) => s.loadFetchConfig);
+  const matchBookmarks = usePopupStore((s) => s.matchBookmarks);
+  const setting = usePopupStore((s) => s.setting);
+  const matchedBookmarks = usePopupStore((s) => s.matchedBookmarks);
+  const bookmarkList = usePopupStore((s) => s.bookmarkList);
+  const fetchConfigList = usePopupStore((s) => s.fetchConfigList);
+  const selectedFolderId = usePopupStore((s) => s.selectedFolderId);
+  const setSelectedFolderId = usePopupStore((s) => s.setSelectedFolderId);
+  const bookmarkMap = usePopupStore((s) => s.bookmarkMap);
+  const bookmarkTree = usePopupStore((s) => s.bookmarkTree);
+  const expandedFolderIds = usePopupStore((s) => s.expandedFolderIds);
+  const setExpandedFolderIds = usePopupStore((s) => s.setExpandedFolderIds);
+  const isLoadingBookmarks = usePopupStore((s) => s.isLoadingBookmarks);
+  const setLoadingBookmarks = usePopupStore((s) => s.setLoadingBookmarks);
+  const sidebarOpen = usePopupStore((s) => s.sidebarOpen);
+  const setSidebarOpen = usePopupStore((s) => s.setSidebarOpen);
+  const updateLoadedImageMap = usePopupStore((s) => s.updateLoadedImageMap);
+  const setSetting = usePopupStore((s) => s.setSetting);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [renderedLimit, setRenderedLimit] = useState(25);
+  const [mode, setMode] = useState<"light" | "dark">("light");
+  const theme = mode === "light" ? lightTheme : darkTheme;
+
+  // Identify folders that contain matched bookmarks in their subtree
+  const { displayItems } = useDisplayBookmarks(
     bookmarkTree,
-    expandedFolderIds,
-    setExpandedFolderIds,
-    isLoadingBookmarks,
-    setLoadingBookmarks,
-    sidebarOpen,
-    setSidebarOpen,
-    updateLoadedImageMap,
-    setSetting,
-  } = usePopupStore();
+    matchedBookmarks,
+    bookmarkMap,
+    selectedFolderId,
+    searchQuery,
+    setting
+  );
+
+  const displayBookmarks = useMemo(() => 
+    displayItems
+      .filter(item => item.type === 'bookmark')
+      .map(item => item.data),
+    [displayItems]
+  );
+
+  // Reset limit when folder or search changes
+  useEffect(() => {
+    setRenderedLimit(25);
+  }, [selectedFolderId, searchQuery]);
+
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && renderedLimit < displayBookmarks.length) {
+          setRenderedLimit((prev) => prev + 25);
+        }
+      },
+      { threshold: 0.1, rootMargin: "200px" }
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [displayBookmarks.length, renderedLimit]);
 
   const [activeTabStatus, setActiveTabStatus] = useState<{
     url: string;
@@ -65,10 +109,6 @@ function PopupApp() {
     hasCover?: boolean;
     isFetching?: boolean;
   } | null>(null);
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [mode, setMode] = useState<"light" | "dark">("light");
-  const theme = mode === "light" ? lightTheme : darkTheme;
 
   useEffect(() => {
     const init = async () => {
@@ -169,20 +209,6 @@ function PopupApp() {
       checkActiveTab();
     }
   }, [fetchConfigList]);
-
-  // Identify folders that contain matched bookmarks in their subtree
-  const { displayItems } = useDisplayBookmarks(
-    bookmarkTree,
-    matchedBookmarks,
-    bookmarkMap,
-    selectedFolderId,
-    searchQuery,
-    setting
-  );
-
-  const displayBookmarks = displayItems
-    .filter(item => item.type === 'bookmark')
-    .map(item => item.data);
 
   const handleBack = () => {
     if (selectedFolderId === "all") return;
@@ -459,7 +485,7 @@ function PopupApp() {
             )}
 
             {!isLoadingBookmarks &&
-              displayBookmarks.map((bk) => (
+              displayBookmarks.slice(0, renderedLimit).map((bk) => (
                 <PopupBookmarkCard
                   key={bk.id}
                   bookmarkId={bk.id}
@@ -467,6 +493,13 @@ function PopupApp() {
                   url={bk.url as string}
                 />
               ))}
+
+            {/* Sentinel for Infinite Scroll */}
+            {!isLoadingBookmarks && renderedLimit < displayBookmarks.length && (
+              <Box ref={loadMoreRef} sx={{ py: 2, display: "flex", justifyContent: "center" }}>
+                <CircularProgress size={20} />
+              </Box>
+            )}
             </Box>
           </Box>
         </Box>

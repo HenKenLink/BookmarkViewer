@@ -16,48 +16,42 @@ export function useDisplayBookmarks(
   searchQuery: string,
   setting: Setting
 ) {
-  // Identify folders that contain matched bookmarks in their subtree
-  const matchedFolderIds = useMemo(() => {
-    const ids = new Set<string>();
-    const parentMap: Record<string, string> = {};
-    
-    const buildParentMap = (node: BookmarkTreeNode) => {
+  // Memoize the parent map independently. It only changes if the tree changes.
+  const parentMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    const build = (node: BookmarkTreeNode) => {
       if (node.children) {
         node.children.forEach((child) => {
-          parentMap[child.id] = node.id;
-          buildParentMap(child);
+          map[child.id] = node.id;
+          build(child);
         });
       }
     };
-    
-    if (bookmarkTree) buildParentMap(bookmarkTree);
+    if (bookmarkTree) build(bookmarkTree);
+    return map;
+  }, [bookmarkTree]);
 
+  // Convert matchedBookmarks to a Set for O(1) lookup
+  const matchedBookmarkIds = useMemo(() => {
+    return new Set(matchedBookmarks.map(bk => bk.id));
+  }, [matchedBookmarks]);
+
+  // Identify folders that contain matched bookmarks in their subtree
+  const matchedFolderIds = useMemo(() => {
+    const ids = new Set<string>();
     matchedBookmarks.forEach((bk) => {
       let currentId = parentMap[bk.id];
       while (currentId) {
+        if (ids.has(currentId)) break; // already traversed
         ids.add(currentId);
         currentId = parentMap[currentId];
       }
     });
-
     return ids;
-  }, [bookmarkTree, matchedBookmarks]);
+  }, [parentMap, matchedBookmarks]);
 
   const folderCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    const parentMap: Record<string, string> = {};
-    
-    const buildParentMap = (node: BookmarkTreeNode) => {
-      if (node.children) {
-        node.children.forEach((child) => {
-          parentMap[child.id] = node.id;
-          buildParentMap(child);
-        });
-      }
-    };
-    
-    if (bookmarkTree) buildParentMap(bookmarkTree);
-
     matchedBookmarks.forEach((bk) => {
       let currentId = parentMap[bk.id];
       while (currentId) {
@@ -65,9 +59,8 @@ export function useDisplayBookmarks(
         currentId = parentMap[currentId];
       }
     });
-    
     return counts;
-  }, [bookmarkTree, matchedBookmarks]);
+  }, [parentMap, matchedBookmarks]);
 
   const displayItems = useMemo(() => {
     const query = searchQuery.toLowerCase();
@@ -92,8 +85,8 @@ export function useDisplayBookmarks(
       if (currentFolder && currentFolder.children) {
         currentFolder.children.forEach((child) => {
           if (child.url) {
-            // Only show if it matches the config (is in matchedBookmarks)
-            if (matchedBookmarks.some((mb) => mb.id === child.id)) {
+            // Only show if it matches the config (O(1) lookup)
+            if (matchedBookmarkIds.has(child.id)) {
               items.push({ type: "bookmark", data: child });
             }
           } else {
@@ -121,6 +114,7 @@ export function useDisplayBookmarks(
   }, [
     selectedFolderId,
     matchedBookmarks,
+    matchedBookmarkIds,
     searchQuery,
     bookmarkMap,
     matchedFolderIds,
