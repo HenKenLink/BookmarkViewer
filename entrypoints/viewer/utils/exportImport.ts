@@ -1,7 +1,7 @@
 import JSZip from "jszip";
 import { saveAs } from "file-saver";
 import { BookmarkTreeNode } from "@/entrypoints/global/types";
-import { SETTINGS_KEY, CONFIGS_KEY } from "../consts";
+import { SETTINGS_KEY, CONFIGS_KEY } from "../../global/consts";
 
 interface ManifestItem {
     filename: string;

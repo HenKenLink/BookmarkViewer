@@ -1,5 +1,4 @@
-import { BookmarkTreeNode, BookmarkFetchItem, LoadedImageMap } from "../global/types";
-import { useStore } from "./store";
+import { BookmarkTreeNode, BookmarkFetchItem, LoadedImageMap } from "./types";
 
 type MatchPattern = {
   hostname: string;
@@ -56,10 +55,9 @@ export function filterBookmarkByMatchPattern(
 // 检查书签的封面加载状态，返回 BookmarkFetchItem 列表
 export async function checkBookmarksLoadStatus(
   bookmarkList: BookmarkTreeNode[],
-  configId: number
+  configId: number,
+  loadedImageMap: LoadedImageMap
 ): Promise<{ items: BookmarkFetchItem[]; newLoadedImageMap: LoadedImageMap }> {
-  const loadedImageMap = useStore.getState().loadedImageMap;
-
   const items: BookmarkFetchItem[] = [];
   const newLoadedImageMap: LoadedImageMap = {};
 

@@ -1,7 +1,7 @@
 import { logger } from "./logger";
 type CreateDetails = Browser.bookmarks.CreateDetails;
 import { FetchConfig } from "./types";
-import { CONFIGS_KEY } from "../viewer/consts";
+import { CONFIGS_KEY } from "./consts";
 
 // 添加parentId会报错
 const testBookmarkList: CreateDetails[] = [

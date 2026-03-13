@@ -17,14 +17,14 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import DownloadIcon from "@mui/icons-material/Download";
 import CloseIcon from "@mui/icons-material/Close";
-import { FolderTree } from "../Components/FolderTree";
+import { SharedFolderTree } from "../../global/components/SharedFolderTree";
 import { FolderCard } from "../Components/FolderCard";
 import { FetchSettingsDialog } from "../Components/FetchSettingsDialog";
 import { SelectionActionBar } from "../Components/SelectionActionBar";
-import { SortControls } from "../Components/SortControls";
-import { UrlFilterControls } from "../Components/UrlFilterControls";
-import { FavoriteFoldersBar } from "../Components/FavoriteFoldersBar";
-import { sortBookmarks, filterByUrlDomains } from "../../global/sortFilterUtils";
+import { SortControls } from "../../global/components/SortControls";
+import { UrlFilterControls } from "../../global/components/UrlFilterControls";
+import { FavoriteFoldersBar } from "../../global/components/FavoriteFoldersBar";
+import { useDisplayBookmarks } from "../../global/hooks/useDisplayBookmarks";
 
 import { NavBar } from "../Components/NavBar";
 import LaunchIcon from "@mui/icons-material/Launch";
@@ -66,55 +66,60 @@ function FetchProgress({ isFetching, progress, total, onStop }: { isFetching: bo
   );
 }
 
-
-
 export function ViewerPage() {
-  const loadFetchConfig = useStore((state) => state.loadFetchConfig);
-
-  const bookmarkList = useStore((state) => state.bookmarkList);
-  const matchBookmarks = useStore((state) => state.matchBookmarks);
-
-  // Removed loadedImageMap subscription to prevent full page re-renders
-  // const loadedImageMap = useStore((state) => state.loadedImageMap);
-
-  const matchedBookmarks = useStore((state) => state.matchedBookmarks);
-  const fetchTaskList = useStore((state) => state.fetchTaskList);
-  const fetchConfigList = useStore((state) => state.fetchConfigList);
-  const isFetching = useStore((state) => state.isFetching);
-  const fetchProgress = useStore((state) => state.fetchProgress);
-  const fetchTotal = useStore((state) => state.fetchTotal);
-  const setFetchStatus = useStore((state) => state.setFetchStatus);
-  const updateFetchProgress = useStore((state) => state.updateFetchProgress);
-  const loadSingleThumb = useStore((state) => state.loadSingleThumb);
-  const stopFetching = useStore((state) => state.stopFetching);
-  const selectedFolderId = useStore((state) => state.selectedFolderId);
-  const setSelectedFolderId = useStore((state) => state.setSelectedFolderId);
-  const bookmarkMap = useStore((state) => state.bookmarkMap);
-  // selectedBookmarkIds removed, handled by SelectionActionBar
-  // const selectedBookmarkIds = useStore((state) => state.selectedBookmarkIds);
-  const clearSelection = useStore((state) => state.clearSelection);
-  const forceFetchThumbnails = useStore((state) => state.forceFetchThumbnails);
-  const downloadMultipleThumbnailsAction = useStore((state) => state.downloadMultipleThumbnailsAction);
-  const isLoadingBookmarks = useStore((state) => state.isLoadingBookmarks);
-  const setLoadingBookmarks = useStore((state) => state.setLoadingBookmarks);
-  const isSelectionMode = useStore((state) => state.isSelectionMode);
-  const setIsSelectionMode = useStore((state) => state.setIsSelectionMode);
-  const setting = useStore((state) => state.setting);
-  const setSetting = useStore((state) => state.setSetting);
+  const {
+    loadFetchConfig,
+    bookmarkList,
+    matchBookmarks,
+    matchedBookmarks,
+    fetchTaskList,
+    fetchConfigList,
+    isFetching,
+    fetchProgress,
+    fetchTotal,
+    setFetchStatus,
+    updateFetchProgress,
+    loadSingleThumb,
+    stopFetching,
+    selectedFolderId,
+    setSelectedFolderId,
+    bookmarkMap,
+    clearSelection,
+    forceFetchThumbnails,
+    downloadMultipleThumbnailsAction,
+    isLoadingBookmarks,
+    setLoadingBookmarks,
+    isSelectionMode,
+    setIsSelectionMode,
+    setting,
+    setSetting,
+    sidebarOpen,
+    setSidebarOpen,
+    bookmarkTree,
+    expandedFolderIds,
+    setExpandedFolderIds,
+    toggleFavoriteFolder,
+    setFavoriteFolderAlias,
+    getAllBookmarksInFolderAction,
+  } = useStore();
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
   const [settingsDialogOpen, setSettingsDialogOpen] = useState(false);
 
-  const sidebarOpen = useStore((state) => state.sidebarOpen);
-  const setSidebarOpen = useStore((state) => state.setSidebarOpen);
-
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down("md"));
 
+  const { displayItems, folderCounts } = useDisplayBookmarks(
+    bookmarkTree,
+    matchedBookmarks,
+    bookmarkMap,
+    selectedFolderId,
+    searchQuery,
+    setting
+  );
+
   const startMatchBookmarks = async () => {
-    // Only show full loading spinner if we don't have any bookmarks yet
-    // This prevents scroll position loss on background refreshes
     const hasItems = useStore.getState().matchedBookmarks.length > 0;
     if (!hasItems) {
       setLoadingBookmarks(true);
@@ -134,14 +139,12 @@ export function ViewerPage() {
     browser.runtime.onMessage.addListener(onMessageListener);
 
     return () => {
-      // Get the latest map from store state instead of using the stale closure
       const currentMap = useStore.getState().loadedImageMap;
       Object.values(currentMap).forEach((blobUrl) => {
         if (blobUrl) {
           URL.revokeObjectURL(blobUrl);
         }
       });
-      // Also clear the map in store so next mount reloads from storage
       useStore.getState().clearLoadedImageMap();
       browser.runtime.onMessage.removeListener(onMessageListener);
     };
@@ -155,8 +158,6 @@ export function ViewerPage() {
     switch (message.type) {
       case messageId.getThumbfinished:
         setFetchStatus(false);
-        // Removed startMatchBookmarks() to prevent full page re-render
-        // Thumbnails are updated in real-time via singleThumbFinished
         break;
       case messageId.fetchStarted:
         setFetchStatus(true, message.total);
@@ -174,123 +175,6 @@ export function ViewerPage() {
         break;
     }
   };
-
-  // const getThumbSrc = (bkId: string) => {
-  //   return loadedImageMap[bkId] || "";
-  // };
-
-  // Identify folders that contain matched bookmarks in their subtree
-  const matchedFolderIds = useMemo(() => {
-    const ids = new Set<string>();
-    const parentMap: Record<string, string> = {};
-    const buildParentMap = (node: BookmarkTreeNode) => {
-      if (node.children) {
-        node.children.forEach(child => {
-          parentMap[child.id] = node.id;
-          buildParentMap(child);
-        });
-      }
-    };
-    const root = useStore.getState().bookmarkTree;
-    if (root) buildParentMap(root);
-
-    matchedBookmarks.forEach(bk => {
-      let currentId = parentMap[bk.id];
-      while (currentId) {
-        ids.add(currentId);
-        currentId = parentMap[currentId];
-      }
-    });
-
-    return ids;
-  }, [matchedBookmarks]);
-
-  const folderCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    const parentMap: Record<string, string> = {};
-    const buildParentMap = (node: BookmarkTreeNode) => {
-      if (node.children) {
-        node.children.forEach(child => {
-          parentMap[child.id] = node.id;
-          buildParentMap(child);
-        });
-      }
-    };
-    const root = useStore.getState().bookmarkTree;
-    if (root) buildParentMap(root);
-
-    matchedBookmarks.forEach(bk => {
-      let currentId = parentMap[bk.id];
-      while (currentId) {
-        counts[currentId] = (counts[currentId] || 0) + 1;
-        currentId = parentMap[currentId];
-      }
-    });
-    return counts;
-  }, [matchedBookmarks]);
-
-  const displayItems = useMemo(() => {
-    const query = searchQuery.toLowerCase();
-    
-    let items: ({ type: 'bookmark' | 'folder', data: BookmarkTreeNode })[] = [];
-
-    // 1. If searching, show flattened results from matchedBookmarks
-    if (query) {
-      items = matchedBookmarks.filter(bk =>
-        bk.title.toLowerCase().includes(query) || (bk.url || "").toLowerCase().includes(query)
-      ).map(bk => ({ type: 'bookmark' as const, data: bk }));
-    }
-    // 2. If 'All Bookmarks', show all matched bookmarks flattened
-    else if (selectedFolderId === "all") {
-      items = matchedBookmarks.map(bk => ({ type: 'bookmark' as const, data: bk }));
-    }
-    // 3. Explorer view: show direct children of the selected folder
-    else {
-      const currentFolder = bookmarkMap[selectedFolderId];
-      if (currentFolder && currentFolder.children) {
-        currentFolder.children.forEach(child => {
-          if (child.url) {
-            // Only show if it matches the config (is in matchedBookmarks)
-            if (matchedBookmarks.some(mb => mb.id === child.id)) {
-              items.push({ type: 'bookmark', data: child });
-            }
-          } else {
-            // Only show if it contains matched bookmarks in its subtree
-            if (matchedFolderIds.has(child.id)) {
-              items.push({ type: 'folder', data: child });
-            }
-          }
-        });
-      }
-    }
-
-    // Apply URL filtering
-    items = filterByUrlDomains(items, setting.urlFilters || []);
-
-    // Apply Sorting
-    items = sortBookmarks(
-      items,
-      setting.sortBy || "dateAdded",
-      setting.sortOrder || "desc",
-      setting.foldersPosition || "top"
-    );
-
-    return items;
-  }, [
-    selectedFolderId,
-    matchedBookmarks,
-    searchQuery,
-    bookmarkMap,
-    matchedFolderIds,
-    setting.urlFilters,
-    setting.sortBy,
-    setting.sortOrder,
-    setting.foldersPosition
-  ]);
-
-  // Handlers moved to SelectionActionBar
-  // const handleBatchFetchThumbs = async () => { ... }
-  // const handleBatchDownloadThumbs = async () => { ... }
 
   const handleBack = () => {
     if (selectedFolderId === "all") return;
@@ -367,7 +251,21 @@ export function ViewerPage() {
             </Typography>
           </Box>
           <Box sx={{ px: 2 }}>
-            <FolderTree />
+            <SharedFolderTree
+              bookmarkTree={bookmarkTree}
+              matchedBookmarks={matchedBookmarks}
+              selectedFolderId={selectedFolderId}
+              setSelectedFolderId={setSelectedFolderId}
+              expandedFolderIds={expandedFolderIds}
+              setExpandedFolderIds={setExpandedFolderIds}
+              setting={setting}
+              bookmarkMap={bookmarkMap}
+              showContextMenu={true}
+              onForceFetchThumbnails={forceFetchThumbnails}
+              onToggleFavoriteFolder={toggleFavoriteFolder}
+              onSetFavoriteFolderAlias={setFavoriteFolderAlias}
+              onGetAllBookmarksInFolder={getAllBookmarksInFolderAction}
+            />
           </Box>
         </Box>
       )}
@@ -422,7 +320,21 @@ export function ViewerPage() {
           </Typography>
         </Box>
         <Box sx={{ px: 2 }}>
-          <FolderTree />
+          <SharedFolderTree
+            bookmarkTree={bookmarkTree}
+            matchedBookmarks={matchedBookmarks}
+            selectedFolderId={selectedFolderId}
+            setSelectedFolderId={setSelectedFolderId}
+            expandedFolderIds={expandedFolderIds}
+            setExpandedFolderIds={setExpandedFolderIds}
+            setting={setting}
+            bookmarkMap={bookmarkMap}
+            showContextMenu={true}
+            onForceFetchThumbnails={forceFetchThumbnails}
+            onToggleFavoriteFolder={toggleFavoriteFolder}
+            onSetFavoriteFolderAlias={setFavoriteFolderAlias}
+            onGetAllBookmarksInFolder={getAllBookmarksInFolderAction}
+          />
         </Box>
       </Drawer>
 
@@ -590,7 +502,6 @@ export function ViewerPage() {
             const id = bk.id;
             const title = bk.title;
             const url = bk.url as string;
-            // No need to pass image prop anymore
             return (
               <ImageTextCard
                 key={id}
@@ -602,24 +513,8 @@ export function ViewerPage() {
           })}
         </Box>
 
-        {/* Multi-selection Floating Action Bar */}
         <SelectionActionBar />
       </Box>
     </Box>
   );
 }
-
-// (bk, index) => {
-//           const id = bk.id;
-//           const title = bk.title;
-//           const url = bk.url as string;
-//           const thumbBlobUrl = getThumbSrc(id);
-//           return (
-//             <ImageTextCard
-//               key={index}
-//               image={thumbBlobUrl}
-//               title={title}
-//               url={url}
-//             />
-//           );
-//         }

@@ -26,7 +26,7 @@ import { toast } from "sonner";
 import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import DownloadIcon from "@mui/icons-material/Download";
-import { PAGE_ITEM_SX } from "../consts";
+import { PAGE_ITEM_SX } from "../../global/consts";
 import { LogLevel } from "../../global/types";
 
 export function SettingsPage() {

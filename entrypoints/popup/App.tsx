@@ -11,7 +11,8 @@ import {
   Stack,
   Tooltip,
 } from "@mui/material";
-import { createTheme, ThemeProvider, alpha } from "@mui/material/styles";
+import { ThemeProvider, alpha } from "@mui/material/styles";
+import { lightTheme, darkTheme } from "../global/theme";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -20,64 +21,42 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import SettingsIcon from "@mui/icons-material/Settings";
 
-import { PopupFolderTree } from "./Components/PopupFolderTree";
+import { SharedFolderTree } from "@/entrypoints/global/components/SharedFolderTree";
 import { PopupBookmarkCard } from "./Components/PopupBookmarkCard";
 import { usePopupStore } from "./store";
 import { BookmarkTreeNode, FetchConfig } from "@/entrypoints/global/types";
 import { messageId } from "@/entrypoints/global/message";
-import { SortControls } from "@/entrypoints/viewer/Components/SortControls";
-import { UrlFilterControls } from "@/entrypoints/viewer/Components/UrlFilterControls";
-import { FavoriteFoldersBar } from "@/entrypoints/viewer/Components/FavoriteFoldersBar";
-import { sortBookmarks, filterByUrlDomains } from "@/entrypoints/global/sortFilterUtils";
+import { SortControls } from "@/entrypoints/global/components/SortControls";
+import { UrlFilterControls } from "@/entrypoints/global/components/UrlFilterControls";
+import { FavoriteFoldersBar } from "@/entrypoints/global/components/FavoriteFoldersBar";
+import { useDisplayBookmarks } from "../global/hooks/useDisplayBookmarks";
 
-const lightTheme = createTheme({
-  palette: {
-    mode: "light",
-    primary: { main: "#1976d2" },
-    background: { default: "#f5f5f5" },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: { root: { borderRadius: 8, textTransform: "none" } },
-      defaultProps: { variant: "contained", color: "primary", size: "medium" },
-    },
-  },
-});
-
-const darkTheme = createTheme({
-  palette: {
-    mode: "dark",
-    primary: { main: "#90caf9" },
-    background: { default: "#121212" },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: { root: { borderRadius: 8, textTransform: "none" } },
-      defaultProps: { variant: "contained", color: "primary", size: "medium" },
-    },
-  },
-});
 
 const SIDEBAR_WIDTH = 200;
 
 function PopupApp() {
-  const getSetting = usePopupStore((s) => s.getSetting);
-  const loadBookmarkTree = usePopupStore((s) => s.loadBookmarkTree);
-  const loadFetchConfig = usePopupStore((s) => s.loadFetchConfig);
-  const matchBookmarks = usePopupStore((s) => s.matchBookmarks);
-  const setting = usePopupStore((s) => s.setting);
-  const matchedBookmarks = usePopupStore((s) => s.matchedBookmarks);
-  const bookmarkList = usePopupStore((s) => s.bookmarkList);
-  const fetchConfigList = usePopupStore((s) => s.fetchConfigList);
-  const selectedFolderId = usePopupStore((s) => s.selectedFolderId);
-  const setSelectedFolderId = usePopupStore((s) => s.setSelectedFolderId);
-  const bookmarkMap = usePopupStore((s) => s.bookmarkMap);
-  const isLoadingBookmarks = usePopupStore((s) => s.isLoadingBookmarks);
-  const setLoadingBookmarks = usePopupStore((s) => s.setLoadingBookmarks);
-  const sidebarOpen = usePopupStore((s) => s.sidebarOpen);
-  const setSidebarOpen = usePopupStore((s) => s.setSidebarOpen);
-  const updateLoadedImageMap = usePopupStore((s) => s.updateLoadedImageMap);
-  const setSetting = usePopupStore((s) => s.setSetting);
+  const {
+    getSetting,
+    loadBookmarkTree,
+    loadFetchConfig,
+    matchBookmarks,
+    setting,
+    matchedBookmarks,
+    bookmarkList,
+    fetchConfigList,
+    selectedFolderId,
+    setSelectedFolderId,
+    bookmarkMap,
+    bookmarkTree,
+    expandedFolderIds,
+    setExpandedFolderIds,
+    isLoadingBookmarks,
+    setLoadingBookmarks,
+    sidebarOpen,
+    setSidebarOpen,
+    updateLoadedImageMap,
+    setSetting,
+  } = usePopupStore();
 
   const [activeTabStatus, setActiveTabStatus] = useState<{
     url: string;
@@ -192,77 +171,18 @@ function PopupApp() {
   }, [fetchConfigList]);
 
   // Identify folders that contain matched bookmarks in their subtree
-  const matchedFolderIds = useMemo(() => {
-    const ids = new Set<string>();
-    const parentMap: Record<string, string> = {};
-    const buildParentMap = (node: BookmarkTreeNode) => {
-      if (node.children) {
-        node.children.forEach((child) => {
-          parentMap[child.id] = node.id;
-          buildParentMap(child);
-        });
-      }
-    };
-    const root = usePopupStore.getState().bookmarkTree;
-    if (root) buildParentMap(root);
-    matchedBookmarks.forEach((bk) => {
-      let currentId = parentMap[bk.id];
-      while (currentId) {
-        ids.add(currentId);
-        currentId = parentMap[currentId];
-      }
-    });
-    return ids;
-  }, [matchedBookmarks]);
-
-  const displayItems = useMemo(() => {
-    const query = searchQuery.toLowerCase();
-    let items: BookmarkTreeNode[] = [];
-
-    if (query) {
-      items = matchedBookmarks.filter(
-        (bk) =>
-          bk.title.toLowerCase().includes(query) ||
-          (bk.url || "").toLowerCase().includes(query)
-      );
-    } else if (selectedFolderId === "all") {
-      items = [...matchedBookmarks];
-    } else {
-      const currentFolder = bookmarkMap[selectedFolderId];
-      if (currentFolder && currentFolder.children) {
-        items = [];
-        currentFolder.children.forEach((child) => {
-          if (child.url) {
-            if (matchedBookmarks.some((mb) => mb.id === child.id)) {
-              items.push(child);
-            }
-          }
-        });
-      }
-    }
-
-    // Apply URL filtering
-    items = filterByUrlDomains(items, setting.urlFilters || []);
-
-    // Apply Sorting
-    items = sortBookmarks(
-      items,
-      setting.sortBy || "dateAdded",
-      setting.sortOrder || "desc",
-      setting.foldersPosition || "top"
-    );
-
-    return items;
-  }, [
-    selectedFolderId,
+  const { displayItems } = useDisplayBookmarks(
+    bookmarkTree,
     matchedBookmarks,
-    searchQuery,
     bookmarkMap,
-    setting.urlFilters,
-    setting.sortBy,
-    setting.sortOrder,
-    setting.foldersPosition
-  ]);
+    selectedFolderId,
+    searchQuery,
+    setting
+  );
+
+  const displayBookmarks = displayItems
+    .filter(item => item.type === 'bookmark')
+    .map(item => item.data);
 
   const handleBack = () => {
     if (selectedFolderId === "all") return;
@@ -366,7 +286,16 @@ function PopupApp() {
 
             {/* Sidebar Tree */}
             <Box sx={{ flex: 1, overflowY: "auto", px: 1, py: 0.5 }}>
-              <PopupFolderTree />
+              <SharedFolderTree
+                bookmarkTree={bookmarkTree}
+                matchedBookmarks={matchedBookmarks}
+                selectedFolderId={selectedFolderId}
+                setSelectedFolderId={setSelectedFolderId}
+                expandedFolderIds={expandedFolderIds}
+                setExpandedFolderIds={setExpandedFolderIds}
+                setting={setting}
+                bookmarkMap={bookmarkMap}
+              />
             </Box>
           </Box>
         )}
@@ -472,7 +401,7 @@ function PopupApp() {
               </IconButton>
             )}
             <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
-              {selectedFolderId === "all" ? "All Bookmarks" : bookmarkMap[selectedFolderId]?.title || "Folder"} · {displayItems.length} items
+              {selectedFolderId === "all" ? "All Bookmarks" : bookmarkMap[selectedFolderId]?.title || "Folder"} · {displayBookmarks.length} items
             </Typography>
           </Box>
 
@@ -516,7 +445,7 @@ function PopupApp() {
               </Box>
             )}
 
-            {!isLoadingBookmarks && displayItems.length === 0 && (
+            {!isLoadingBookmarks && displayBookmarks.length === 0 && (
               <Box sx={{ pt: 6, textAlign: "center", color: "text.secondary" }}>
                 <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
                   No matching bookmarks found.
@@ -530,7 +459,7 @@ function PopupApp() {
             )}
 
             {!isLoadingBookmarks &&
-              displayItems.map((bk) => (
+              displayBookmarks.map((bk) => (
                 <PopupBookmarkCard
                   key={bk.id}
                   bookmarkId={bk.id}

@@ -10,7 +10,8 @@ import { SettingsPage } from "./Pages/settingsPage";
 import { useLoadBookmarks } from "./hooks/useLoadBookmarks";
 import { NavItem } from "@/entrypoints/global/types";
 
-import { createTheme, ThemeProvider } from "@mui/material/styles";
+import { ThemeProvider } from "@mui/material/styles";
+import { lightTheme, darkTheme } from "../global/theme";
 
 import { useStore } from "./store";
 import { Toaster } from "sonner";
@@ -30,81 +31,6 @@ const navItemList: NavItem[] = [
   },
 ];
 
-const lightTheme = createTheme({
-  palette: {
-    mode: "light",
-    primary: {
-      main: "#1976d2",
-    },
-    background: {
-      default: "#f5f5f5",
-    },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 8,
-          textTransform: "none",
-          "&.nav-button": {
-            borderRadius: 8,
-            textTransform: "none",
-            backgroundColor: "#1976d2",
-            color: "#fff",
-          },
-        },
-      },
-      defaultProps: {
-        variant: "contained",
-        color: "primary",
-        size: "medium",
-      },
-    },
-    MuiTypography: {
-      styleOverrides: {
-        root: {
-          "&.card-title": {
-            fontSize: 20,
-            fontWeight: 400,
-            marginBottom: 2,
-            overflow: "hidden",
-            textOverflow: "ellipsis",
-            display: "-webkit-box",
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: "vertical",
-          },
-        },
-      },
-    },
-  },
-});
-
-const darkTheme = createTheme({
-  palette: {
-    mode: "dark",
-    primary: {
-      main: "#90caf9",
-    },
-    background: {
-      default: "#121212",
-    },
-  },
-  components: {
-    MuiButton: {
-      styleOverrides: {
-        root: {
-          borderRadius: 8,
-          textTransform: "none",
-        },
-      },
-      defaultProps: {
-        variant: "contained",
-        color: "primary",
-        size: "medium",
-      },
-    },
-  },
-});
 
 export default function App() {
   useLoadBookmarks();

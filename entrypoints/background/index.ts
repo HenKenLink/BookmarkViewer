@@ -5,7 +5,7 @@ import { FetchTask, FetchConfig } from "../global/types";
 import { waitForTabLoad } from "../global/globalUtils";
 
 import { SelectorType, Setting } from "../global/types";
-import { SETTINGS_KEY } from "../viewer/consts";
+import { SETTINGS_KEY } from "../global/consts";
 
 type Thumb = {
   pageUrl: string;
