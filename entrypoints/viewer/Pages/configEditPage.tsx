@@ -29,7 +29,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import { autocompletion } from "@codemirror/autocomplete";
 
-import { FetchConfig, SelectorType, FetchMode, ResultType } from "@/entrypoints/global/types";
+import { FetchConfig, SelectorType, FetchMode, ResultType, ScreenshotType } from "@/entrypoints/global/types";
 import { toast } from "sonner";
 import InfoIcon from "@mui/icons-material/Info";
 import LanguageIcon from "@mui/icons-material/Language";
@@ -43,6 +43,9 @@ import TextFieldsIcon from "@mui/icons-material/TextFields";
 import TuneIcon from "@mui/icons-material/Tune";
 import PhotoIcon from "@mui/icons-material/Photo";
 import OndemandVideoIcon from "@mui/icons-material/OndemandVideo";
+import ScreenshotIcon from "@mui/icons-material/Screenshot";
+import FullscreenIcon from "@mui/icons-material/Fullscreen";
+import AspectRatioIcon from "@mui/icons-material/AspectRatio";
 
 import { styled, keyframes } from "@mui/material/styles";
 
@@ -216,6 +219,10 @@ export function ConfigEditPage() {
     const [configRegexPettern, setConfigRegexPettern] = useState<string>("");
     const [configMode, setConfigMode] = useState<FetchMode>("page");
     const [configResultType, setConfigResultType] = useState<ResultType>("cover_url");
+    const [configScreenshotType, setConfigScreenshotType] = useState<ScreenshotType>("full");
+    const [configScreenshotWidth, setConfigScreenshotWidth] = useState<number>(1280);
+    const [configScreenshotHeight, setConfigScreenshotHeight] = useState<number>(720);
+    const [configScreenshotDelay, setConfigScreenshotDelay] = useState<number>(2000);
     const [configSelector, setConfigSelector] = useState<string>("");
     const [configSelectorType, setConfigSelectorType] =
         useState<SelectorType>("regex");
@@ -259,6 +266,10 @@ export function ConfigEditPage() {
             setConfigHostname(matchedConfig.hostname);
             setConfigMode(matchedConfig.mode || "page");
             setConfigResultType(matchedConfig.resultType || "cover_url");
+            setConfigScreenshotType(matchedConfig.screenshotType || "full");
+            setConfigScreenshotWidth(matchedConfig.screenshotWidth || 1280);
+            setConfigScreenshotHeight(matchedConfig.screenshotHeight || 720);
+            setConfigScreenshotDelay(matchedConfig.screenshotDelay || 2000);
             const initialSelectorType = matchedConfig.selectorType || "regex";
             setConfigSelectorType(initialSelectorType);
 
@@ -308,8 +319,8 @@ export function ConfigEditPage() {
         if (
             !configName ||
             !configHostname ||
-            (configMode === "page" && !configSelector) ||
-            (configMode === "fast" && !configSelector)
+            ((configMode === "page" || configMode === "fast") && !configSelector) ||
+            (configMode === "screenshot" && configScreenshotType !== "full" && !configSelector)
         ) {
             toast.error(
                 "Please fill in all required fields (Name, Hostname, and Mode-specific fields)"
@@ -323,12 +334,16 @@ export function ConfigEditPage() {
             regexPattern: configRegexPettern,
             mode: configMode,
             resultType: configMode === "page" ? configResultType : undefined,
-            selector: (configMode === "fast" || configMode === "page") ? configSelector : undefined,
+            selector: (configMode === "fast" || configMode === "page" || (configMode === "screenshot" && configScreenshotType !== "full")) ? configSelector : undefined,
             selectorType: (configMode === "fast" || configMode === "page") ? configSelectorType : undefined,
             attribute:
                 (configMode === "fast" || configMode === "page") && configSelectorType === "css"
                     ? configAttribute
                     : undefined,
+            screenshotType: configMode === "screenshot" ? configScreenshotType : undefined,
+            screenshotWidth: configMode === "screenshot" ? configScreenshotWidth : undefined,
+            screenshotHeight: configMode === "screenshot" ? configScreenshotHeight : undefined,
+            screenshotDelay: configMode === "screenshot" ? configScreenshotDelay : undefined,
         };
         if (isNew) {
             await setFetchConfig(config, false);
@@ -558,7 +573,110 @@ export function ConfigEditPage() {
                                         >
                                             Fast Mode
                                         </ModeButton>
+                                        <ModeButton
+                                            active={configMode === "screenshot"}
+                                            onClick={() => setConfigMode("screenshot")}
+                                            startIcon={<ScreenshotIcon />}
+                                        >
+                                            Screenshot Mode
+                                        </ModeButton>
                                     </ModeSelector>
+
+                                    {/* Screenshot Mode */}
+                                    <Collapse in={configMode === "screenshot"} timeout={setting.enableAnimations ? undefined : 0}>
+                                        <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                                            <Box>
+                                                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1.5, fontWeight: 600 }}>
+                                                    Screenshot Type
+                                                </Typography>
+                                                <FormControl fullWidth size="small">
+                                                    <Select
+                                                        value={configScreenshotType}
+                                                        onChange={(e) => setConfigScreenshotType(e.target.value as ScreenshotType)}
+                                                        sx={{ borderRadius: 2 }}
+                                                    >
+                                                        <MenuItem value="full">
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                                <FullscreenIcon fontSize="small" color="primary" />
+                                                                <Box>
+                                                                    <Typography variant="body2" fontWeight={500}>Full Viewport</Typography>
+                                                                    <Typography variant="caption" color="text.secondary">Captures the entire visible page at given dimensions</Typography>
+                                                                </Box>
+                                                            </Box>
+                                                        </MenuItem>
+                                                        <MenuItem value="css">
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                                <AspectRatioIcon fontSize="small" color="primary" />
+                                                                <Box>
+                                                                    <Typography variant="body2" fontWeight={500}>CSS Selector Element</Typography>
+                                                                    <Typography variant="caption" color="text.secondary">Captures only a specific element found by CSS</Typography>
+                                                                </Box>
+                                                            </Box>
+                                                        </MenuItem>
+                                                        <MenuItem value="xpath">
+                                                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                                                                <CodeIcon fontSize="small" color="primary" />
+                                                                <Box>
+                                                                    <Typography variant="body2" fontWeight={500}>XPath Element</Typography>
+                                                                    <Typography variant="caption" color="text.secondary">Captures only a specific element found by XPath</Typography>
+                                                                </Box>
+                                                            </Box>
+                                                        </MenuItem>
+                                                    </Select>
+                                                </FormControl>
+                                            </Box>
+
+                                            <Grid container spacing={2}>
+                                                <Grid size={{ xs: 12, sm: 4 }}>
+                                                    <StyledTextField
+                                                        label="Viewport Width"
+                                                        type="number"
+                                                        variant="outlined"
+                                                        fullWidth
+                                                        value={configScreenshotWidth}
+                                                        onChange={(e) => setConfigScreenshotWidth(Number(e.target.value))}
+                                                        helperText="Window width (px)"
+                                                    />
+                                                </Grid>
+                                                <Grid size={{ xs: 12, sm: 4 }}>
+                                                    <StyledTextField
+                                                        label="Viewport Height"
+                                                        type="number"
+                                                        variant="outlined"
+                                                        fullWidth
+                                                        value={configScreenshotHeight}
+                                                        onChange={(e) => setConfigScreenshotHeight(Number(e.target.value))}
+                                                        helperText="Window height (px)"
+                                                    />
+                                                </Grid>
+                                                <Grid size={{ xs: 12, sm: 4 }}>
+                                                    <StyledTextField
+                                                        label="Capture Delay"
+                                                        type="number"
+                                                        variant="outlined"
+                                                        fullWidth
+                                                        value={configScreenshotDelay}
+                                                        onChange={(e) => setConfigScreenshotDelay(Number(e.target.value))}
+                                                        helperText="Delay before capture (ms)"
+                                                    />
+                                                </Grid>
+                                            </Grid>
+
+                                            {configScreenshotType !== "full" && (
+                                                <StyledTextField
+                                                    label={configScreenshotType === "css" ? "CSS Selector" : "XPath Expression"}
+                                                    variant="outlined"
+                                                    fullWidth
+                                                    multiline={true}
+                                                    minRows={2}
+                                                    placeholder={configScreenshotType === "css" ? '.video-player, #main-image' : '//div[@class="player"]'}
+                                                    helperText="Selector for the element to capture"
+                                                    value={configSelector}
+                                                    onChange={(e) => setConfigSelector(e.target.value)}
+                                                />
+                                            )}
+                                        </Box>
+                                    </Collapse>
 
                                     {/* Simple & Open Simple Mode */}
                                     <Collapse in={configMode === "fast" || configMode === "page"} timeout={setting.enableAnimations ? undefined : 0}>

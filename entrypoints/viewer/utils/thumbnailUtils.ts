@@ -31,18 +31,21 @@ export async function uploadThumbnailFile(
     pageUrl: string
 ): Promise<string> {
     try {
-        // Read file as array buffer
-        const arrayBuffer = await file.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
+        // Convert file to data URL
+        const reader = new FileReader();
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
 
         // Save to storage
         await browser.storage.local.set({
-            [pageUrl]: Array.from(uint8Array)
+            [pageUrl]: dataUrl
         });
 
-        // Create blob URL for immediate display
-        const blob = new Blob([uint8Array], { type: file.type });
-        const blobUrl = URL.createObjectURL(blob);
+        // Create blob URL for immediate display (or just use dataUrl)
+        const blobUrl = dataUrl;
 
         return blobUrl;
     } catch (error) {

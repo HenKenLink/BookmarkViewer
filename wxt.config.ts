@@ -33,6 +33,7 @@ export default defineConfig({
     },
     permissions: [
       "storage",
+      "unlimitedStorage",
       "tabs",
       "bookmarks",
       "scripting",

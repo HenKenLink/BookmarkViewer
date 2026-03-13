@@ -16,8 +16,9 @@ export type BookmarkFetchItem = {
   configId: number;
   isLoaded: boolean;
 };
-export type FetchMode = "fast" | "page";
+export type FetchMode = "fast" | "page" | "screenshot";
 export type SelectorType = "regex" | "css" | "xpath";
+export type ScreenshotType = "full" | "xpath" | "css";
 export type LogLevel = "debug" | "info" | "warn" | "error" | "none";
 
 // 按配置分组的获取任务
@@ -38,6 +39,10 @@ export type FetchConfig = {
   selectorType?: SelectorType;
   attribute?: string;
   resultType?: ResultType;
+  screenshotType?: ScreenshotType;
+  screenshotWidth?: number;
+  screenshotHeight?: number;
+  screenshotDelay?: number;
 };
 
 export type NavItem = {

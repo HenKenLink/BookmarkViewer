@@ -1,4 +1,4 @@
-import { HashRouter as Router, Routes, Route } from "react-router-dom";
+import { HashRouter as Router, Routes, Route, useNavigate } from "react-router-dom";
 import { Box, CssBaseline } from "@mui/material";
 import { NavBar } from "./Components/NavBar";
 import { useState, useEffect } from "react";
@@ -31,6 +31,35 @@ const navItemList: NavItem[] = [
   },
 ];
 
+// Handles global mouse button navigation (side buttons)
+function GlobalNavigationHandler() {
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const handleNavigation = (e: MouseEvent) => {
+      // Mouse button codes: 3 is Back, 4 is Forward
+      if (e.button === 3) {
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(-1);
+      } else if (e.button === 4) {
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(1);
+      }
+    };
+
+    window.addEventListener("auxclick", handleNavigation);
+    window.addEventListener("mouseup", handleNavigation);
+
+    return () => {
+      window.removeEventListener("auxclick", handleNavigation);
+      window.removeEventListener("mouseup", handleNavigation);
+    };
+  }, [navigate]);
+
+  return null;
+}
 
 export default function App() {
   useLoadBookmarks();
@@ -48,6 +77,7 @@ export default function App() {
       <CssBaseline />
       <Toaster />
       <Router>
+        <GlobalNavigationHandler />
         <Box
           sx={{
             minHeight: "100vh",

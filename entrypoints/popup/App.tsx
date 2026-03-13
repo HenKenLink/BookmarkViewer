@@ -54,6 +54,7 @@ function PopupApp() {
   const sidebarOpen = usePopupStore((s) => s.sidebarOpen);
   const setSidebarOpen = usePopupStore((s) => s.setSidebarOpen);
   const updateLoadedImageMap = usePopupStore((s) => s.updateLoadedImageMap);
+  const loadSingleThumb = usePopupStore((s) => s.loadSingleThumb);
   const setSetting = usePopupStore((s) => s.setSetting);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -116,6 +117,7 @@ function PopupApp() {
       try {
         // Parallelize initialization for faster popup opening
         await Promise.all([getSetting(), loadBookmarkTree(), loadFetchConfig()]);
+        await matchBookmarks();
       } finally {
         setLoadingBookmarks(false);
       }
@@ -123,27 +125,37 @@ function PopupApp() {
     init();
   }, []);
 
+  // Reload and re-match when user changes bookmarks (keep consistent with Viewer)
+  useEffect(() => {
+    const reloadTree = async () => {
+      await loadBookmarkTree();
+      await matchBookmarks();
+    };
+
+    browser.bookmarks.onCreated.addListener(reloadTree);
+    browser.bookmarks.onChanged.addListener(reloadTree);
+    browser.bookmarks.onRemoved.addListener(reloadTree);
+    browser.bookmarks.onMoved.addListener(reloadTree);
+
+    return () => {
+      browser.bookmarks.onCreated.removeListener(reloadTree);
+      browser.bookmarks.onChanged.removeListener(reloadTree);
+      browser.bookmarks.onRemoved.removeListener(reloadTree);
+      browser.bookmarks.onMoved.removeListener(reloadTree);
+    };
+  }, [loadBookmarkTree, matchBookmarks]);
+
   useEffect(() => {
     setMode(setting.darkMode ? "dark" : "light");
   }, [setting]);
-
-  useEffect(() => {
-    if (bookmarkList.length > 0 && fetchConfigList.length > 0) {
-      matchBookmarks();
-    }
-  }, [bookmarkList, fetchConfigList]);
 
   // Real-time message listener
   useEffect(() => {
     const listener = (message: any) => {
       if (message.type === messageId.singleThumbFinished) {
-        // Reload image for this page URL
-        browser.storage.local.get(message.pageUrl).then((res) => {
-          const raw = res[message.pageUrl];
-          if (raw && Array.isArray(raw) && raw.length > 0) {
-            updateLoadedImageMap({ [message.pageUrl]: raw[0] });
-          }
-        });
+        // Reload image for this page URL using shared logic
+        loadSingleThumb(message.pageUrl);
+        
         // Update active tab status if matches
         if (activeTabStatus?.url === message.pageUrl) {
           setActiveTabStatus(prev => prev ? { ...prev, hasCover: true, isFetching: false } : null);
@@ -152,7 +164,7 @@ function PopupApp() {
     };
     browser.runtime.onMessage.addListener(listener);
     return () => browser.runtime.onMessage.removeListener(listener);
-  }, [activeTabStatus, updateLoadedImageMap]);
+  }, [activeTabStatus, loadSingleThumb]);
 
   // Detect active tab and its status
   useEffect(() => {

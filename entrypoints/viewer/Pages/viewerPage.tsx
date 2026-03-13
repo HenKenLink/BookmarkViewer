@@ -34,6 +34,7 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import React, { useRef } from "react";
+import { useSearchParams, useNavigate } from "react-router-dom";
 
 async function startGetThumb(fetchTaskList: FetchTask[]): Promise<void> {
   if (fetchTaskList.length > 0) {
@@ -76,8 +77,6 @@ export function ViewerPage() {
   const updateFetchProgress = useStore((s) => s.updateFetchProgress);
   const loadSingleThumb = useStore((s) => s.loadSingleThumb);
   const stopFetching = useStore((s) => s.stopFetching);
-  const selectedFolderId = useStore((s) => s.selectedFolderId);
-  const setSelectedFolderId = useStore((s) => s.setSelectedFolderId);
   const bookmarkMap = useStore((s) => s.bookmarkMap);
   const forceFetchThumbnails = useStore((s) => s.forceFetchThumbnails);
   const isLoadingBookmarks = useStore((s) => s.isLoadingBookmarks);
@@ -95,6 +94,39 @@ export function ViewerPage() {
   const getAllBookmarksInFolderAction = useStore((s) => s.getAllBookmarksInFolderAction);
   const clearSelection = useStore((s) => s.clearSelection);
   const downloadMultipleThumbnailsAction = useStore((s) => s.downloadMultipleThumbnailsAction);
+
+  const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const selectedFolderId = searchParams.get("folder") || "all";
+
+  const setSelectedFolderId = (id: string) => {
+    if (id === "all") {
+      searchParams.delete("folder");
+    } else {
+      searchParams.set("folder", id);
+    }
+    setSearchParams(searchParams);
+  };
+
+  // Sync search params to store for persistence and other components
+  const storeSetSelectedFolderId = useStore((s) => s.setSelectedFolderId);
+  const storeSelectedFolderId = useStore((s) => s.selectedFolderId);
+  
+  useEffect(() => {
+    const urlFolderId = searchParams.get("folder");
+    
+    if (urlFolderId) {
+      // URL has a folder, update store
+      if (urlFolderId !== storeSelectedFolderId) {
+        storeSetSelectedFolderId(urlFolderId);
+      }
+    } else {
+      // URL has no folder, if store has a persisted folder, sync it to URL
+      if (storeSelectedFolderId && storeSelectedFolderId !== "all") {
+        setSearchParams({ folder: storeSelectedFolderId }, { replace: true });
+      }
+    }
+  }, [searchParams, storeSelectedFolderId, storeSetSelectedFolderId, setSearchParams]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -190,17 +222,30 @@ export function ViewerPage() {
   };
 
   useEffect(() => {
-    const handleMouseUp = (e: MouseEvent) => {
+    const handleNavigation = (e: MouseEvent) => {
+      // Side buttons: 3 is Back, 4 is Forward
       if (e.button === 3) {
         e.preventDefault();
-        handleBack();
+        e.stopPropagation();
+        navigate(-1);
+      } else if (e.button === 4) {
+        e.preventDefault();
+        e.stopPropagation();
+        navigate(1);
       }
     };
-    window.addEventListener("mouseup", handleMouseUp);
+
+    // auxclick is specifically for non-left mouse buttons
+    window.addEventListener("auxclick", handleNavigation);
+    
+    // Some browsers/mice might still use mouseup for side buttons
+    window.addEventListener("mouseup", handleNavigation);
+
     return () => {
-      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("auxclick", handleNavigation);
+      window.removeEventListener("mouseup", handleNavigation);
     };
-  }, [selectedFolderId, bookmarkMap]);
+  }, [navigate]);
 
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>

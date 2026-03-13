@@ -26,7 +26,6 @@ type ViewerStoreAction = {
   clearLoadedImageMap: () => void;
   setFetchStatus: (isFetching: boolean, total?: number) => void;
   updateFetchProgress: (progress: number) => void;
-  loadSingleThumb: (pageUrl: string) => Promise<void>;
   stopFetching: () => void;
   setSelectedBookmarkIds: (ids: string[]) => void;
   toggleBookmarkSelection: (id: string) => void;
@@ -66,33 +65,6 @@ export const actionSlice: StateCreator<Store, [], [], ViewerStoreAction> = (
   },
   updateFetchProgress: (progress) => {
     set(() => ({ fetchProgress: progress }));
-  },
-  loadSingleThumb: async (pageUrl) => {
-    try {
-      const storageData = await browser.storage.local.get(pageUrl);
-      const raw = storageData[pageUrl] as any;
-
-      if (raw && raw.length > 0) {
-        const buf = new Uint8Array(raw);
-        const blob = new Blob([buf.buffer], { type: "image/jpeg" });
-        const blobUrl = URL.createObjectURL(blob);
-
-        const bookmarkList = get().bookmarkList;
-        const newMapEntries: LoadedImageMap = {};
-
-        bookmarkList.forEach((bk) => {
-          if (bk.url === pageUrl) {
-            newMapEntries[bk.id] = blobUrl;
-          }
-        });
-
-        if (Object.keys(newMapEntries).length > 0) {
-          get().updateLoadedImageMap(newMapEntries);
-        }
-      }
-    } catch (e) {
-      console.error(`Error loading single thumb for ${pageUrl}:`, e);
-    }
   },
   stopFetching: () => {
     browser.runtime.sendMessage({ type: "stopFetch" });

@@ -36,6 +36,7 @@ export type BookmarkSliceAction = {
     matchedBookmarks: BookmarkTreeNode[];
     fetchTaskList: FetchTask[];
   }>;
+  loadSingleThumb: (pageUrl: string) => Promise<void>;
   updateLoadedImageMap: (newMap: LoadedImageMap) => void;
   setSelectedFolderId: (id: string) => void;
   setExpandedFolderIds: (ids: string[]) => void;
@@ -207,7 +208,7 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
           if (!purl) continue;
           if (loadedImageMap[bk.id]) continue; // already loaded
           const raw = storageData[purl];
-          if (raw && raw.length > 0) {
+          if (raw && ((Array.isArray(raw) && raw.length > 0) || (typeof raw === "string" && raw.startsWith("data:")))) {
             // Defer blob URL creation to idle time
             pendingBlobEntries.push({ bookmarkId: bk.id, url: purl });
           } else {
@@ -233,11 +234,17 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
         for (const { bookmarkId, url } of chunk) {
           if (!urlToBlobUrl[url]) {
             const raw = storageData[url];
-            const buf = new Uint8Array(raw);
-            const blob = new Blob([buf.buffer], { type: "image/jpeg" });
-            urlToBlobUrl[url] = URL.createObjectURL(blob);
+            if (Array.isArray(raw)) {
+              const buf = new Uint8Array(raw);
+              const blob = new Blob([buf.buffer], { type: "image/jpeg" });
+              urlToBlobUrl[url] = URL.createObjectURL(blob);
+            } else if (typeof raw === "string" && raw.startsWith("data:")) {
+              urlToBlobUrl[url] = raw;
+            }
           }
-          newMap[bookmarkId] = urlToBlobUrl[url];
+          if (urlToBlobUrl[url]) {
+            newMap[bookmarkId] = urlToBlobUrl[url];
+          }
         }
 
         get().updateLoadedImageMap(newMap);
@@ -273,6 +280,39 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
     }
 
     return res;
+  },
+
+  loadSingleThumb: async (pageUrl) => {
+    try {
+      const storageData = await browser.storage.local.get(pageUrl);
+      const raw = storageData[pageUrl] as any;
+
+      let blobUrl = "";
+      if (raw && Array.isArray(raw) && raw.length > 0) {
+        const buf = new Uint8Array(raw);
+        const blob = new Blob([buf.buffer], { type: "image/jpeg" });
+        blobUrl = URL.createObjectURL(blob);
+      } else if (typeof raw === "string" && raw.startsWith("data:")) {
+        blobUrl = raw;
+      }
+      if (blobUrl) {
+
+        const bookmarkList = get().bookmarkList;
+        const newMapEntries: LoadedImageMap = {};
+
+        bookmarkList.forEach((bk) => {
+          if (bk.url === pageUrl) {
+            newMapEntries[bk.id] = blobUrl;
+          }
+        });
+
+        if (Object.keys(newMapEntries).length > 0) {
+          get().updateLoadedImageMap(newMapEntries);
+        }
+      }
+    } catch (e) {
+      console.error(`Error loading single thumb for ${pageUrl}:`, e);
+    }
   },
 
   updateLoadedImageMap: (newMap) => {
