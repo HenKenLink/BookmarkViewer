@@ -24,6 +24,8 @@ import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 import { useStore } from "../store";
 import { BookmarkCardBase } from "../../global/components/BookmarkCardBase";
 
+import { PhotoView } from "react-photo-view";
+
 interface ImageTextCardProps {
   bookmarkId: string;
   title: string;
@@ -225,45 +227,38 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
           />
 
           <ImageContainer>
-            <Link
-              href={url}
-              onClick={handleLinkClick}
-              target="_blank"
-              rel="noopener noreferrer"
-              underline="none"
-            >
-              {isInView ? (
-                image ? (
-                  <StyledCardMedia
-                    component="img"
-                    image={image}
-                    alt={title}
-                  />
-                ) : (
-                  <Box
-                    sx={{
-                      width: "100%",
-                      height: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "grey.200",
-                      color: "grey.500",
-                    }}
-                  >
-                    <Typography variant="body2">No Preview</Typography>
-                  </Box>
-                )
-              ) : (
-                <Skeleton
-                  variant="rectangular"
-                  width="100%"
-                  height="100%"
-                  animation="wave"
-                  sx={{ bgcolor: (theme) => alpha(theme.palette.grey[200], 0.5) }}
+            {image ? (
+              <PhotoView src={image}>
+                <StyledCardMedia
+                  component="img"
+                  image={image}
+                  alt={title}
+                  sx={{ cursor: "zoom-in" }}
                 />
-              )}
-            </Link>
+              </PhotoView>
+            ) : isInView ? (
+              <Box
+                sx={{
+                  width: "100%",
+                  height: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "grey.200",
+                  color: "grey.500",
+                }}
+              >
+                <Typography variant="body2">No Preview</Typography>
+              </Box>
+            ) : (
+              <Skeleton
+                variant="rectangular"
+                width="100%"
+                height="100%"
+                animation="wave"
+                sx={{ bgcolor: (theme) => alpha(theme.palette.grey[200], 0.5) }}
+              />
+            )}
           </ImageContainer>
 
           <ContentArea>

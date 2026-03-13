@@ -12,6 +12,8 @@ import { NavItem } from "@/entrypoints/global/types";
 
 import { ThemeProvider } from "@mui/material/styles";
 import { lightTheme, darkTheme } from "../global/theme";
+import { PhotoProvider } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
 
 import { useStore } from "./store";
 import { Toaster } from "sonner";
@@ -75,24 +77,30 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Toaster />
-      <Router>
-        <GlobalNavigationHandler />
-        <Box
-          sx={{
-            minHeight: "100vh",
-          }}
-        >
-          <NavBar navItemList={navItemList} />
-          <Routes>
-            <Route path="/" element={<ViewerPage />} />
-            <Route path="/config" element={<ConfigPage />} />
-            <Route path="/config/:id" element={<ConfigEditPage />} />
-            <Route path="/config/new" element={<ConfigEditPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Routes>
-        </Box>
-      </Router>
+      <PhotoProvider
+        maskOpacity={0.8}
+        bannerVisible={false}
+        speed={() => 0}
+      >
+        <Toaster />
+        <Router>
+          <GlobalNavigationHandler />
+          <Box
+            sx={{
+              minHeight: "100vh",
+            }}
+          >
+            <NavBar navItemList={navItemList} />
+            <Routes>
+              <Route path="/" element={<ViewerPage />} />
+              <Route path="/config" element={<ConfigPage />} />
+              <Route path="/config/:id" element={<ConfigEditPage />} />
+              <Route path="/config/new" element={<ConfigEditPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+            </Routes>
+          </Box>
+        </Router>
+      </PhotoProvider>
     </ThemeProvider>
   );
 }

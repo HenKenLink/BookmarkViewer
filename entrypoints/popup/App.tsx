@@ -13,6 +13,8 @@ import {
 } from "@mui/material";
 import { ThemeProvider, alpha } from "@mui/material/styles";
 import { lightTheme, darkTheme } from "../global/theme";
+import { PhotoProvider } from "react-photo-view";
+import "react-photo-view/dist/react-photo-view.css";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -23,6 +25,8 @@ import SettingsIcon from "@mui/icons-material/Settings";
 
 import { SharedFolderTree } from "@/entrypoints/global/components/SharedFolderTree";
 import { PopupBookmarkCard } from "./Components/PopupBookmarkCard";
+import FolderRoundedIcon from "@mui/icons-material/FolderRounded";
+import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import { usePopupStore } from "./store";
 import { toast, Toaster } from "sonner";
 import { BookmarkTreeNode, FetchConfig } from "@/entrypoints/global/types";
@@ -34,6 +38,56 @@ import { useDisplayBookmarks } from "../global/hooks/useDisplayBookmarks";
 
 
 const SIDEBAR_WIDTH = 200;
+
+const PopupFolderCard: React.FC<{ title: string; onClick: () => void; itemCount?: number }> = ({ title, onClick, itemCount }) => (
+  <Box
+    onClick={onClick}
+    sx={{
+      display: "flex",
+      alignItems: "center",
+      gap: 1.5,
+      p: 1.5,
+      mb: 1,
+      borderRadius: 2,
+      bgcolor: "background.paper",
+      border: "1px solid",
+      borderColor: "divider",
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+      "&:hover": {
+        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.04),
+        borderColor: "primary.main",
+        transform: "translateX(4px)",
+      },
+    }}
+  >
+    <Box
+      sx={{
+        width: 36,
+        height: 36,
+        borderRadius: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1),
+        color: "primary.main",
+      }}
+    >
+      <FolderRoundedIcon fontSize="small" />
+    </Box>
+    <Box sx={{ flex: 1, minWidth: 0 }}>
+      <Typography variant="body2" noWrap sx={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis" }}>
+        {title}
+      </Typography>
+      {itemCount !== undefined && (
+        <Typography variant="caption" color="text.secondary">
+          {itemCount} items
+        </Typography>
+      )}
+    </Box>
+    <ArrowForwardIosIcon sx={{ fontSize: 12, color: "text.disabled" }} />
+  </Box>
+);
 
 function PopupApp() {
   const getSetting = usePopupStore((s) => s.getSetting);
@@ -78,24 +132,19 @@ function PopupApp() {
     bookmarkToConfigsMap
   );
 
-  const displayBookmarks = useMemo(() => 
-    displayItems
-      .filter(item => item.type === 'bookmark')
-      .map(item => item.data),
-    [displayItems]
-  );
+  const displayList = useMemo(() => displayItems, [displayItems]);
 
   // Reset limit when folder or search changes
   useEffect(() => {
     setRenderedLimit(25);
-  }, [selectedFolderId, searchQuery]);
+  }, [selectedFolderId, searchQuery, selectedConfigGroupId]);
 
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && renderedLimit < displayBookmarks.length) {
+        if (entries[0].isIntersecting && renderedLimit < displayList.length) {
           setRenderedLimit((prev) => prev + 25);
         }
       },
@@ -107,7 +156,7 @@ function PopupApp() {
     }
 
     return () => observer.disconnect();
-  }, [displayBookmarks.length, renderedLimit]);
+  }, [displayList.length, renderedLimit]);
 
   const [activeTabStatus, setActiveTabStatus] = useState<{
     url: string;
@@ -272,267 +321,280 @@ function PopupApp() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Toaster />
-      <Box
-        sx={{
-          display: "flex",
-          width: "100%",
-          height: "100%",
-          overflow: "hidden",
-          bgcolor: "background.default",
-        }}
-      >
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <Box
-            sx={{
-              width: SIDEBAR_WIDTH,
-              minWidth: SIDEBAR_WIDTH,
-              height: "100%",
-              display: "flex",
-              flexDirection: "column",
-              borderRight: "1px solid",
-              borderColor: "divider",
-              bgcolor: (theme) =>
-                theme.palette.mode === "light" ? "grey.50" : "#1a1a2e",
-              overflow: "hidden",
-              flexShrink: 0,
-            }}
-          >
-            {/* Sidebar Header */}
+      <PhotoProvider maskOpacity={0.8} bannerVisible={false} speed={() => 0}>
+        <Toaster />
+        <Box
+          sx={{
+            display: "flex",
+            width: "100%",
+            height: "100%",
+            overflow: "hidden",
+            bgcolor: "background.default",
+          }}
+        >
+          {/* Sidebar */}
+          {sidebarOpen && (
             <Box
               sx={{
-                background: (theme) =>
-                  theme.palette.mode === "light"
-                    ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`
-                    : `linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)`,
-                px: 1.5,
-                py: 1,
+                width: SIDEBAR_WIDTH,
+                minWidth: SIDEBAR_WIDTH,
+                height: "100%",
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
+                flexDirection: "column",
+                borderRight: "1px solid",
+                borderColor: "divider",
+                bgcolor: (theme) =>
+                  theme.palette.mode === "light" ? "grey.50" : "#1a1a2e",
+                overflow: "hidden",
                 flexShrink: 0,
               }}
             >
-              <Box>
-                <Typography
-                  variant="subtitle2"
-                  sx={{ fontWeight: 700, color: "white", fontSize: "0.8rem" }}
-                >
-                  📁 Library
-                </Typography>
-                <Typography
-                  variant="caption"
-                  sx={{ color: "rgba(255,255,255,0.75)", fontSize: "0.65rem" }}
-                >
-                  {matchedBookmarks.length} bookmarks
-                </Typography>
-              </Box>
-              <IconButton
-                size="small"
-                onClick={() => setSidebarOpen(false)}
-                sx={{ color: "rgba(255,255,255,0.8)", "&:hover": { color: "white" } }}
+              {/* Sidebar Header */}
+              <Box
+                sx={{
+                  background: (theme) =>
+                    theme.palette.mode === "light"
+                      ? `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`
+                      : `linear-gradient(135deg, #1565c0 0%, #0d47a1 100%)`,
+                  px: 1.5,
+                  py: 1,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexShrink: 0,
+                }}
               >
-                <ChevronLeftIcon sx={{ fontSize: 18 }} />
-              </IconButton>
+                <Box>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 700, color: "white", fontSize: "0.8rem" }}
+                  >
+                    📁 Library
+                  </Typography>
+                  <Typography
+                    variant="caption"
+                    sx={{ color: "rgba(255,255,255,0.75)", fontSize: "0.65rem" }}
+                  >
+                    {matchedBookmarks.length} bookmarks
+                  </Typography>
+                </Box>
+                <IconButton
+                  size="small"
+                  onClick={() => setSidebarOpen(false)}
+                  sx={{ color: "rgba(255,255,255,0.8)", "&:hover": { color: "white" } }}
+                >
+                  <ChevronLeftIcon sx={{ fontSize: 18 }} />
+                </IconButton>
+              </Box>
+
+              {/* Sidebar Tree */}
+              <Box sx={{ flex: 1, overflowY: "auto", px: 1, py: 0.5 }}>
+                <SharedFolderTree
+                  bookmarkTree={bookmarkTree}
+                  matchedBookmarks={matchedBookmarks}
+                  selectedFolderId={selectedFolderId}
+                  setSelectedFolderId={setSelectedFolderId}
+                  selectedConfigGroupId={selectedConfigGroupId}
+                  setSelectedConfigGroupId={setSelectedConfigGroupId}
+                  expandedFolderIds={expandedFolderIds}
+                  setExpandedFolderIds={setExpandedFolderIds}
+                  setting={setting}
+                  bookmarkMap={bookmarkMap}
+                />
+              </Box>
             </Box>
+          )}
 
-            {/* Sidebar Tree */}
-            <Box sx={{ flex: 1, overflowY: "auto", px: 1, py: 0.5 }}>
-              <SharedFolderTree
-                bookmarkTree={bookmarkTree}
-                matchedBookmarks={matchedBookmarks}
-                selectedFolderId={selectedFolderId}
-                setSelectedFolderId={setSelectedFolderId}
-                selectedConfigGroupId={selectedConfigGroupId}
-                setSelectedConfigGroupId={setSelectedConfigGroupId}
-                expandedFolderIds={expandedFolderIds}
-                setExpandedFolderIds={setExpandedFolderIds}
-                setting={setting}
-                bookmarkMap={bookmarkMap}
-              />
-            </Box>
-          </Box>
-        )}
-
-        {/* Main Content */}
-        <Box
-          sx={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            height: "100%",
-            overflow: "hidden",
-            minWidth: 0,
-          }}
-        >
-          {/* Top Bar */}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              px: 1.5,
-              py: 0.75,
-              borderBottom: "1px solid",
-              borderColor: "divider",
-              flexShrink: 0,
-              bgcolor: "background.paper",
-            }}
-          >
-            <IconButton size="small" onClick={() => setSidebarOpen(!sidebarOpen)}>
-              <MenuIcon sx={{ fontSize: 18 }} />
-            </IconButton>
-
-            <TextField
-              size="small"
-              fullWidth
-              variant="outlined"
-              placeholder="Search bookmarks..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              slotProps={{
-                input: {
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon sx={{ fontSize: 16, color: "text.secondary" }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end" sx={{ gap: 0 }}>
-                      {searchQuery && (
-                        <IconButton size="small" onClick={() => setSearchQuery("")} edge={false}>
-                          <ClearIcon sx={{ fontSize: 14 }} />
-                        </IconButton>
-                      )}
-                      <UrlFilterControls
-                        urlFilters={setting.urlFilters || []}
-                        onChange={(filters) => setSetting({ urlFilters: filters })}
-                        size="small"
-                      />
-                      <SortControls
-                        sortBy={setting.sortBy || "dateAdded"}
-                        sortOrder={setting.sortOrder || "desc"}
-                        foldersPosition={setting.foldersPosition || "top"}
-                        onChange={(updates) => setSetting(updates)}
-                        size="small"
-                      />
-                    </InputAdornment>
-                  ),
-                  sx: { fontSize: "0.8rem", py: 0 },
-                },
-              }}
-              sx={{
-                "& .MuiOutlinedInput-root": {
-                  borderRadius: 2,
-                  height: 32,
-                },
-              }}
-            />
-
-            <Tooltip title="Open full viewer">
-              <IconButton size="small" onClick={openOptionsPage} sx={{ flexShrink: 0 }}>
-                <OpenInNewIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            </Tooltip>
-          </Box>
-
-          {/* Folder breadcrumb / count row */}
-          <Box
-            sx={{
-              px: 1.5,
-              py: 0.5,
-              display: "flex",
-              alignItems: "center",
-              borderBottom: "1px solid",
-              borderColor: "divider",
-              flexShrink: 0,
-              bgcolor: "background.paper",
-            }}
-          >
-            {selectedFolderId !== "all" && (
-              <IconButton size="small" onClick={handleBack} sx={{ mr: 1, p: 0.5 }}>
-                <ArrowBackIcon sx={{ fontSize: 16 }} />
-              </IconButton>
-            )}
-            <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
-              {selectedFolderId === "all" ? "All Bookmarks" : bookmarkMap[selectedFolderId]?.title || "Folder"} · {displayBookmarks.length} items
-            </Typography>
-          </Box>
-
-          {/* Bookmark List */}
+          {/* Main Content */}
           <Box
             sx={{
               flex: 1,
-              overflowY: "auto",
-              pt: 0.5,
+              display: "flex",
+              flexDirection: "column",
+              height: "100%",
+              overflow: "hidden",
+              minWidth: 0,
             }}
           >
-            {setting.showFavoriteFolders && setting.favoriteFolderIds?.length > 0 && (
-              <FavoriteFoldersBar
-                favoriteFolderIds={setting.favoriteFolderIds}
-                bookmarkMap={bookmarkMap}
-                selectedFolderId={selectedFolderId}
-                onSelect={setSelectedFolderId}
-                aliases={setting.favoriteFolderAliases || {}}
-                chipSize="small"
-                sx={{ px: 1, mb: 1 }}
+            {/* Top Bar */}
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 1,
+                px: 1.5,
+                py: 0.75,
+                borderBottom: "1px solid",
+                borderColor: "divider",
+                flexShrink: 0,
+                bgcolor: "background.paper",
+              }}
+            >
+              <IconButton size="small" onClick={() => setSidebarOpen(!sidebarOpen)}>
+                <MenuIcon sx={{ fontSize: 18 }} />
+              </IconButton>
+
+              <TextField
+                size="small"
+                fullWidth
+                variant="outlined"
+                placeholder="Search bookmarks..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                slotProps={{
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+                      </InputAdornment>
+                    ),
+                    endAdornment: (
+                      <InputAdornment position="end" sx={{ gap: 0 }}>
+                        {searchQuery && (
+                          <IconButton size="small" onClick={() => setSearchQuery("")} edge={false}>
+                            <ClearIcon sx={{ fontSize: 14 }} />
+                          </IconButton>
+                        )}
+                        <UrlFilterControls
+                          urlFilters={setting.urlFilters || []}
+                          onChange={(filters) => setSetting({ urlFilters: filters })}
+                          size="small"
+                        />
+                        <SortControls
+                          sortBy={setting.sortBy || "dateAdded"}
+                          sortOrder={setting.sortOrder || "desc"}
+                          foldersPosition={setting.foldersPosition || "top"}
+                          onChange={(updates) => setSetting(updates)}
+                          size="small"
+                        />
+                      </InputAdornment>
+                    ),
+                    sx: { fontSize: "0.8rem", py: 0 },
+                  },
+                }}
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: 2,
+                    height: 32,
+                  },
+                }}
               />
-            )}
 
-            <Box sx={{ px: 1.5, pb: 1 }}>
-              {isLoadingBookmarks && (
-              <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", pt: 6 }}>
-                <CircularProgress size={30} />
-              </Box>
-            )}
+              <Tooltip title="Open full viewer">
+                <IconButton size="small" onClick={openOptionsPage} sx={{ flexShrink: 0 }}>
+                  <OpenInNewIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              </Tooltip>
+            </Box>
 
-            {setting.showActiveTabBanner && activeTabStatus?.matches && (
-              <Box sx={{ mb: 1.5, px: 1.5, py: 1, borderRadius: 2, bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08), display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <Typography variant="caption" sx={{ fontWeight: 800, color: "primary.main", fontSize: "0.7rem", letterSpacing: "0.05em", textTransform: "uppercase" }}>
-                  ✨ SITE MATCHED
-                </Typography>
-                <Box sx={{ px: 1, py: 0.2, borderRadius: 1.5, bgcolor: activeTabStatus.hasCover ? "success.main" : (activeTabStatus.isFetching ? "info.main" : "warning.main"), color: "white" }}>
-                  <Typography variant="caption" sx={{ fontWeight: 800, fontSize: "0.6rem" }}>
-                    {activeTabStatus.hasCover ? "SYNCED" : (activeTabStatus.isFetching ? "SYNCING..." : "NO COVER")}
-                  </Typography>
-                </Box>
-              </Box>
-            )}
+            {/* Folder breadcrumb / count row */}
+            <Box
+              sx={{
+                px: 1.5,
+                py: 0.5,
+                display: "flex",
+                alignItems: "center",
+                borderBottom: "1px solid",
+                borderColor: "divider",
+                flexShrink: 0,
+                bgcolor: "background.paper",
+              }}
+            >
+              {selectedFolderId !== "all" && (
+                <IconButton size="small" onClick={handleBack} sx={{ mr: 1, p: 0.5 }}>
+                  <ArrowBackIcon sx={{ fontSize: 16 }} />
+                </IconButton>
+              )}
+              <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
+                {selectedFolderId === "all" ? "All Bookmarks" : bookmarkMap[selectedFolderId]?.title || "Folder"} · {displayList.length} items
+              </Typography>
+            </Box>
 
-            {!isLoadingBookmarks && displayBookmarks.length === 0 && (
-              <Box sx={{ pt: 6, textAlign: "center", color: "text.secondary" }}>
-                <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
-                  No matching bookmarks found.
-                </Typography>
-                {fetchConfigList.length === 0 && (
-                  <Typography variant="caption" sx={{ display: "block", mt: 1, fontSize: "0.72rem" }}>
-                    Set up configs in the full viewer first.
-                  </Typography>
-                )}
-              </Box>
-            )}
-
-            {!isLoadingBookmarks &&
-              displayBookmarks.slice(0, renderedLimit).map((bk) => (
-                <PopupBookmarkCard
-                  key={bk.id}
-                  bookmarkId={bk.id}
-                  title={bk.title}
-                  url={bk.url as string}
+            {/* Bookmark List */}
+            <Box
+              sx={{
+                flex: 1,
+                overflowY: "auto",
+                pt: 0.5,
+              }}
+            >
+              {setting.showFavoriteFolders && setting.favoriteFolderIds?.length > 0 && (
+                <FavoriteFoldersBar
+                  favoriteFolderIds={setting.favoriteFolderIds}
+                  bookmarkMap={bookmarkMap}
+                  selectedFolderId={selectedFolderId}
+                  onSelect={setSelectedFolderId}
+                  aliases={setting.favoriteFolderAliases || {}}
+                  chipSize="small"
+                  sx={{ px: 1, mb: 1 }}
                 />
-              ))}
+              )}
 
-            {/* Sentinel for Infinite Scroll */}
-            {!isLoadingBookmarks && renderedLimit < displayBookmarks.length && (
-              <Box ref={loadMoreRef} sx={{ py: 2, display: "flex", justifyContent: "center" }}>
-                <CircularProgress size={20} />
+              <Box sx={{ px: 1.5, pb: 1 }}>
+                {isLoadingBookmarks && (
+                <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", pt: 6 }}>
+                  <CircularProgress size={30} />
+                </Box>
+              )}
+
+              {setting.showActiveTabBanner && activeTabStatus?.matches && (
+                <Box sx={{ mb: 1.5, px: 1.5, py: 1, borderRadius: 2, bgcolor: (theme) => alpha(theme.palette.primary.main, 0.08), display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <Typography variant="caption" sx={{ fontWeight: 800, color: "primary.main", fontSize: "0.7rem", letterSpacing: "0.05em", textTransform: "uppercase" }}>
+                    ✨ SITE MATCHED
+                  </Typography>
+                  <Box sx={{ px: 1, py: 0.2, borderRadius: 1.5, bgcolor: activeTabStatus.hasCover ? "success.main" : (activeTabStatus.isFetching ? "info.main" : "warning.main"), color: "white" }}>
+                    <Typography variant="caption" sx={{ fontWeight: 800, fontSize: "0.6rem" }}>
+                      {activeTabStatus.hasCover ? "SYNCED" : (activeTabStatus.isFetching ? "SYNCING..." : "NO COVER")}
+                    </Typography>
+                  </Box>
+                </Box>
+              )}
+
+              {!isLoadingBookmarks && displayList.length === 0 && (
+                <Box sx={{ pt: 6, textAlign: "center", color: "text.secondary" }}>
+                  <Typography variant="body2" sx={{ fontSize: "0.8rem" }}>
+                    No matching bookmarks found.
+                  </Typography>
+                  {fetchConfigList.length === 0 && (
+                    <Typography variant="caption" sx={{ display: "block", mt: 1, fontSize: "0.72rem" }}>
+                      Set up configs in the full viewer first.
+                    </Typography>
+                  )}
+                </Box>
+              )}
+
+              {!isLoadingBookmarks &&
+                displayList.slice(0, renderedLimit).map((item) => {
+                  if (item.type === "folder") {
+                    return (
+                      <PopupFolderCard
+                        key={item.data.id}
+                        title={item.data.title}
+                        onClick={() => setSelectedFolderId(item.data.id)}
+                      />
+                    );
+                  }
+                  return (
+                    <PopupBookmarkCard
+                      key={item.data.id}
+                      bookmarkId={item.data.id}
+                      title={item.data.title}
+                      url={item.data.url as string}
+                    />
+                  );
+                })}
+
+              {/* Sentinel for Infinite Scroll */}
+              {!isLoadingBookmarks && renderedLimit < displayList.length && (
+                <Box ref={loadMoreRef} sx={{ py: 2, display: "flex", justifyContent: "center" }}>
+                  <CircularProgress size={20} />
+                </Box>
+              )}
               </Box>
-            )}
             </Box>
           </Box>
         </Box>
-      </Box>
+      </PhotoProvider>
     </ThemeProvider>
   );
 }

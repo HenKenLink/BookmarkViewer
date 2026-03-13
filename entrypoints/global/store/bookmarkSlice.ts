@@ -27,6 +27,7 @@ export type BookmarkSliceState = {
   expandedFolderIds: string[];
   sidebarOpen: boolean;
   isLoadingBookmarks: boolean;
+  isSettingsLoaded: boolean;
 };
 
 export type BookmarkSliceAction = {
@@ -90,6 +91,7 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
   expandedFolderIds: [],
   sidebarOpen: true,
   isLoadingBookmarks: false,
+  isSettingsLoaded: false,
 
   getSetting: async () => {
     const result = await browser.storage.local.get(SETTINGS_KEY);
@@ -101,7 +103,10 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
         selectedFolderId: storedSetting.selectedFolderId ?? "all",
         selectedConfigGroupId: storedSetting.selectedConfigGroupId ?? "all",
         expandedFolderIds: storedSetting.expandedFolderIds ?? [],
+        isSettingsLoaded: true,
       });
+    } else {
+      set({ isSettingsLoaded: true });
     }
   },
 

@@ -4,6 +4,7 @@ import { alpha } from "@mui/material/styles";
 import LanguageIcon from "@mui/icons-material/Language";
 import { usePopupStore } from "../store";
 import { BookmarkCardBase } from "../../global/components/BookmarkCardBase";
+import { PhotoView } from "react-photo-view";
 
 interface PopupBookmarkCardProps {
   bookmarkId: string;
@@ -51,6 +52,12 @@ export const PopupBookmarkCard: React.FC<PopupBookmarkCardProps> = React.memo(
           >
             {/* Image Section */}
             <Box
+              onClick={(e) => {
+                if (image) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                }
+              }}
               sx={{
                 width: 90,
                 minWidth: 90,
@@ -65,12 +72,14 @@ export const PopupBookmarkCard: React.FC<PopupBookmarkCardProps> = React.memo(
             >
               {isInView ? (
                 image ? (
-                  <Box
-                    component="img"
-                    src={image}
-                    alt={title}
-                    sx={{ width: "100%", height: "100%", objectFit: "cover" }}
-                  />
+                  <PhotoView src={image}>
+                    <Box
+                      component="img"
+                      src={image}
+                      alt={title}
+                      sx={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
+                    />
+                  </PhotoView>
                 ) : (
                   <Box
                     sx={{

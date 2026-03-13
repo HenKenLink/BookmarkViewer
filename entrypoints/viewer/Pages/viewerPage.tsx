@@ -98,6 +98,7 @@ export function ViewerPage() {
   const selectedConfigGroupId = useStore((s) => s.selectedConfigGroupId);
   const storeSetSelectedConfigGroupId = useStore((s) => s.setSelectedConfigGroupId);
   const bookmarkToConfigsMap = useStore((s) => s.bookmarkToConfigsMap);
+  const isSettingsLoaded = useStore((s) => s.isSettingsLoaded);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -125,21 +126,23 @@ export function ViewerPage() {
   const storeSetSelectedFolderId = useStore((s) => s.setSelectedFolderId);
   const storeSelectedFolderId = useStore((s) => s.selectedFolderId);
   
-  const [isInitialized, setIsInitialized] = useState(false);
+  const isInitializedRef = useRef(false);
 
   useEffect(() => {
+    if (!isSettingsLoaded) return;
+
     const urlFolderId = searchParams.get("folder");
     const urlGroupId = searchParams.get("group") || "all";
     
-    // 1. URL -> Store sync (Main logic)
+    // 1. Folder sync logic
     if (urlFolderId) {
       if (urlFolderId !== storeSelectedFolderId) {
         storeSetSelectedFolderId(urlFolderId);
       }
     } else {
       // URL has no folder. 
-      // If we are NOT initialized yet, try to restore from store (persisted setting)
-      if (!isInitialized) {
+      if (!isInitializedRef.current) {
+        // Initial load: restore from store to URL if store has a value
         if (storeSelectedFolderId && storeSelectedFolderId !== "all") {
           setSearchParams(params => {
             params.set("folder", storeSelectedFolderId);
@@ -147,30 +150,53 @@ export function ViewerPage() {
           }, { replace: true });
         }
       } else {
-        // If we ARE initialized and URL is empty, it means the user explicitly chose "All"
+        // Post-init: if URL is cleared, set store to all
         if (storeSelectedFolderId !== "all") {
           storeSetSelectedFolderId("all");
         }
       }
     }
 
-    if (urlGroupId !== selectedConfigGroupId) {
-      // Validate that the group actually exists
-      const groupExists = urlGroupId === "all" || (setting.configGroups || []).some(g => g.id === urlGroupId);
-      
+    // 2. Group sync logic
+    if (urlGroupId !== "all") {
+      // Group in URL: sync to store if valid
+      const groupExists = (setting.configGroups || []).some(g => g.id === urlGroupId);
       if (groupExists) {
-        storeSetSelectedConfigGroupId(urlGroupId);
+        if (urlGroupId !== selectedConfigGroupId) {
+          storeSetSelectedConfigGroupId(urlGroupId);
+        }
       } else {
-        // Clear invalid group from URL
+        // Invalid group in URL: clear it
         setSearchParams(params => {
           params.delete("group");
           return params;
         }, { replace: true });
       }
+    } else {
+      // No group in URL
+      if (!isInitializedRef.current) {
+        // Initial load: restore from store to URL
+        if (selectedConfigGroupId && selectedConfigGroupId !== "all") {
+          const groupExists = (setting.configGroups || []).some(g => g.id === selectedConfigGroupId);
+          if (groupExists) {
+            setSearchParams(params => {
+              params.set("group", selectedConfigGroupId);
+              return params;
+            }, { replace: true });
+          } else {
+            storeSetSelectedConfigGroupId("all");
+          }
+        }
+      } else {
+        // Post-init: URL is "all", sync store
+        if (selectedConfigGroupId !== "all") {
+          storeSetSelectedConfigGroupId("all");
+        }
+      }
     }
 
-    setIsInitialized(true);
-  }, [searchParams, storeSelectedFolderId, storeSetSelectedFolderId, selectedConfigGroupId, storeSetSelectedConfigGroupId, setSearchParams, setting.configGroups, isInitialized]);
+    isInitializedRef.current = true;
+  }, [searchParams, storeSelectedFolderId, storeSetSelectedFolderId, selectedConfigGroupId, storeSetSelectedConfigGroupId, setSearchParams, setting.configGroups, isSettingsLoaded]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
