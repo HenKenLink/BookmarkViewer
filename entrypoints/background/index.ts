@@ -305,9 +305,13 @@ async function processScreenshotItem(pageUrl: string, config: FetchConfig, progr
     if (dataUrl) {
       const success = await saveThumb({ pageUrl, thumbUrl: dataUrl });
       if (success && progressReporter) progressReporter(1);
+      else if (!success) browser.runtime.sendMessage({ type: messageId.fetchFailed, pageUrl });
+    } else {
+      browser.runtime.sendMessage({ type: messageId.fetchFailed, pageUrl });
     }
   } catch (err) {
     logger.error(`[Background] Screenshot failed for ${pageUrl}`, err);
+    browser.runtime.sendMessage({ type: messageId.fetchFailed, pageUrl });
   } finally {
     if (windowId) try { await browser.windows.remove(windowId); } catch (e) {}
   }
@@ -419,7 +423,11 @@ async function processExistingTabForCover(tabId: number, pageUrl: string, config
         return true;
       }
     }
-  } catch (err) {} finally {
+    browser.runtime.sendMessage({ type: messageId.fetchFailed, pageUrl });
+    return false;
+  } catch (err) {
+    browser.runtime.sendMessage({ type: messageId.fetchFailed, pageUrl });
+  } finally {
     activeAutoFetchTasks.delete(pageUrl);
   }
   return false;
@@ -458,7 +466,10 @@ async function fastFetchCoverForUrl(pageUrl: string, config: FetchConfig): Promi
         return true;
       }
     }
-  } catch (err) {}
+    browser.runtime.sendMessage({ type: messageId.fetchFailed, pageUrl });
+  } catch (err) {
+    browser.runtime.sendMessage({ type: messageId.fetchFailed, pageUrl });
+  }
   return false;
 }
 
@@ -495,6 +506,9 @@ export default defineBackground(() => {
         currentProgress++;
         successCount += successDelta;
         browser.runtime.sendMessage({ type: messageId.singleThumbFinished, pageUrl, progress: currentProgress, total: totalItemsCount });
+        if (successDelta === 0) {
+          browser.runtime.sendMessage({ type: messageId.fetchFailed, pageUrl });
+        }
       };
 
       for (const task of fetchTaskList) {

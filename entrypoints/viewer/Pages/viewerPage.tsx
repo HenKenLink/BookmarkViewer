@@ -1,6 +1,7 @@
 import { useStore } from "../store/index";
 import { messageId } from "../../global/message";
 import { useState, useEffect, useMemo } from "react";
+import { toast } from "sonner";
 import {
   BookmarkTreeNode,
   FetchTask,
@@ -94,6 +95,9 @@ export function ViewerPage() {
   const getAllBookmarksInFolderAction = useStore((s) => s.getAllBookmarksInFolderAction);
   const clearSelection = useStore((s) => s.clearSelection);
   const downloadMultipleThumbnailsAction = useStore((s) => s.downloadMultipleThumbnailsAction);
+  const selectedConfigGroupId = useStore((s) => s.selectedConfigGroupId);
+  const storeSetSelectedConfigGroupId = useStore((s) => s.setSelectedConfigGroupId);
+  const bookmarkToConfigsMap = useStore((s) => s.bookmarkToConfigsMap);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -108,25 +112,65 @@ export function ViewerPage() {
     setSearchParams(searchParams);
   };
 
+  const setSelectedConfigGroupId = (id: string) => {
+    if (id === "all") {
+      searchParams.delete("group");
+    } else {
+      searchParams.set("group", id);
+    }
+    setSearchParams(searchParams);
+  };
+
   // Sync search params to store for persistence and other components
   const storeSetSelectedFolderId = useStore((s) => s.setSelectedFolderId);
   const storeSelectedFolderId = useStore((s) => s.selectedFolderId);
   
+  const [isInitialized, setIsInitialized] = useState(false);
+
   useEffect(() => {
     const urlFolderId = searchParams.get("folder");
+    const urlGroupId = searchParams.get("group") || "all";
     
+    // 1. URL -> Store sync (Main logic)
     if (urlFolderId) {
-      // URL has a folder, update store
       if (urlFolderId !== storeSelectedFolderId) {
         storeSetSelectedFolderId(urlFolderId);
       }
     } else {
-      // URL has no folder, if store has a persisted folder, sync it to URL
-      if (storeSelectedFolderId && storeSelectedFolderId !== "all") {
-        setSearchParams({ folder: storeSelectedFolderId }, { replace: true });
+      // URL has no folder. 
+      // If we are NOT initialized yet, try to restore from store (persisted setting)
+      if (!isInitialized) {
+        if (storeSelectedFolderId && storeSelectedFolderId !== "all") {
+          setSearchParams(params => {
+            params.set("folder", storeSelectedFolderId);
+            return params;
+          }, { replace: true });
+        }
+      } else {
+        // If we ARE initialized and URL is empty, it means the user explicitly chose "All"
+        if (storeSelectedFolderId !== "all") {
+          storeSetSelectedFolderId("all");
+        }
       }
     }
-  }, [searchParams, storeSelectedFolderId, storeSetSelectedFolderId, setSearchParams]);
+
+    if (urlGroupId !== selectedConfigGroupId) {
+      // Validate that the group actually exists
+      const groupExists = urlGroupId === "all" || (setting.configGroups || []).some(g => g.id === urlGroupId);
+      
+      if (groupExists) {
+        storeSetSelectedConfigGroupId(urlGroupId);
+      } else {
+        // Clear invalid group from URL
+        setSearchParams(params => {
+          params.delete("group");
+          return params;
+        }, { replace: true });
+      }
+    }
+
+    setIsInitialized(true);
+  }, [searchParams, storeSelectedFolderId, storeSetSelectedFolderId, selectedConfigGroupId, storeSetSelectedConfigGroupId, setSearchParams, setting.configGroups, isInitialized]);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -142,7 +186,9 @@ export function ViewerPage() {
     bookmarkMap,
     selectedFolderId,
     searchQuery,
-    setting
+    setting,
+    selectedConfigGroupId,
+    bookmarkToConfigsMap
   );
 
   // Reset limit when folder or search changes
@@ -207,6 +253,13 @@ export function ViewerPage() {
         break;
       case messageId.fetchStopped:
         setFetchStatus(false);
+        break;
+      case messageId.fetchFailed:
+        const bookmark = Object.values(bookmarkMap).find(b => b.url === message.pageUrl);
+        toast.error(`Failed to fetch thumbnail for: ${bookmark?.title || message.pageUrl}`, {
+          description: "Please check your configuration or network.",
+          duration: 4000,
+        });
         break;
     }
   };
@@ -304,6 +357,8 @@ export function ViewerPage() {
               matchedBookmarks={matchedBookmarks}
               selectedFolderId={selectedFolderId}
               setSelectedFolderId={setSelectedFolderId}
+              selectedConfigGroupId={selectedConfigGroupId}
+              setSelectedConfigGroupId={setSelectedConfigGroupId}
               expandedFolderIds={expandedFolderIds}
               setExpandedFolderIds={setExpandedFolderIds}
               setting={setting}

@@ -19,9 +19,11 @@ export type BookmarkSliceState = {
   bookmarkMap: BookmarkMap;
   bookmarksByHost: BookmarksByHost;
   matchedBookmarks: BookmarkTreeNode[];
+  bookmarkToConfigsMap: Record<string, number[]>;
   loadedImageMap: LoadedImageMap;
   fetchConfigList: FetchConfig[];
   selectedFolderId: string;
+  selectedConfigGroupId: string;
   expandedFolderIds: string[];
   sidebarOpen: boolean;
   isLoadingBookmarks: boolean;
@@ -39,6 +41,7 @@ export type BookmarkSliceAction = {
   loadSingleThumb: (pageUrl: string) => Promise<void>;
   updateLoadedImageMap: (newMap: LoadedImageMap) => void;
   setSelectedFolderId: (id: string) => void;
+  setSelectedConfigGroupId: (id: string) => void;
   setExpandedFolderIds: (ids: string[]) => void;
   setSidebarOpen: (open: boolean) => void;
   setLoadingBookmarks: (loading: boolean) => void;
@@ -79,9 +82,11 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
   bookmarkMap: {},
   bookmarksByHost: {},
   matchedBookmarks: [],
+  bookmarkToConfigsMap: {},
   loadedImageMap: {},
   fetchConfigList: [],
   selectedFolderId: "all",
+  selectedConfigGroupId: "all",
   expandedFolderIds: [],
   sidebarOpen: true,
   isLoadingBookmarks: false,
@@ -94,6 +99,7 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
         setting: storedSetting,
         sidebarOpen: storedSetting.sidebarOpen ?? true,
         selectedFolderId: storedSetting.selectedFolderId ?? "all",
+        selectedConfigGroupId: storedSetting.selectedConfigGroupId ?? "all",
         expandedFolderIds: storedSetting.expandedFolderIds ?? [],
       });
     }
@@ -185,6 +191,7 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
     // Build work items for all (host, config) pairs
     const allMatchedBookmarks: BookmarkTreeNode[] = [];
     const fetchTaskList: FetchTask[] = [];
+    const bookmarkToConfigsMap: Record<string, number[]> = {};
     // Collect (bookmarkId -> url) pairs that have storage data but no blob URL yet
     const pendingBlobEntries: Array<{ bookmarkId: string; url: string }> = [];
 
@@ -200,7 +207,13 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
 
         if (matchedAtHost.length === 0) continue;
 
-        allMatchedBookmarks.push(...matchedAtHost);
+        matchedAtHost.forEach(bk => {
+          if (!bookmarkToConfigsMap[bk.id]) {
+            bookmarkToConfigsMap[bk.id] = [];
+            allMatchedBookmarks.push(bk);
+          }
+          bookmarkToConfigsMap[bk.id].push(config.id);
+        });
 
         const unloadedItems: BookmarkFetchItem[] = [];
         for (const bk of matchedAtHost) {
@@ -271,12 +284,12 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
     const isSameMatched = currentMatched.length === allMatchedBookmarks.length &&
       currentMatched.every((bk, idx) => bk.id === allMatchedBookmarks[idx].id);
 
-    const res = { matchedBookmarks: allMatchedBookmarks, fetchTaskList };
+    const res = { matchedBookmarks: allMatchedBookmarks, fetchTaskList, bookmarkToConfigsMap };
     if (!isSameMatched) {
       set(res as any);
     } else {
       // Always update fetchTaskList even if matched set is unchanged
-      set({ fetchTaskList } as any);
+      set({ fetchTaskList, bookmarkToConfigsMap } as any);
     }
 
     return res;
@@ -322,6 +335,11 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
   setSelectedFolderId: (id: string) => {
     set({ selectedFolderId: id });
     get().setSetting({ selectedFolderId: id });
+  },
+
+  setSelectedConfigGroupId: (id: string) => {
+    set({ selectedConfigGroupId: id });
+    get().setSetting({ selectedConfigGroupId: id });
   },
 
   setExpandedFolderIds: (ids: string[]) => {

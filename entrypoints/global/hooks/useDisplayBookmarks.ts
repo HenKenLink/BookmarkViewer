@@ -14,8 +14,24 @@ export function useDisplayBookmarks(
   bookmarkMap: BookmarkMap,
   selectedFolderId: string,
   searchQuery: string,
-  setting: Setting
+  setting: Setting,
+  selectedConfigGroupId: string = "all",
+  bookmarkToConfigsMap: Record<string, number[]> = {}
 ) {
+  // Memoize filtered bookmarks based on selected group
+  const groupMatchedBookmarks = useMemo(() => {
+    if (selectedConfigGroupId === "all") return matchedBookmarks;
+    
+    const group = (setting.configGroups || []).find(g => g.id === selectedConfigGroupId);
+    if (!group) return matchedBookmarks;
+    
+    const groupConfigIds = new Set(group.configIds);
+    return matchedBookmarks.filter(bk => {
+      const bkConfigIds = bookmarkToConfigsMap[bk.id] || [];
+      return bkConfigIds.some(id => groupConfigIds.has(id));
+    });
+  }, [matchedBookmarks, selectedConfigGroupId, setting.configGroups, bookmarkToConfigsMap]);
+
   // Memoize the parent map independently. It only changes if the tree changes.
   const parentMap = useMemo(() => {
     const map: Record<string, string> = {};
@@ -31,15 +47,15 @@ export function useDisplayBookmarks(
     return map;
   }, [bookmarkTree]);
 
-  // Convert matchedBookmarks to a Set for O(1) lookup
+  // Convert groupMatchedBookmarks to a Set for O(1) lookup
   const matchedBookmarkIds = useMemo(() => {
-    return new Set(matchedBookmarks.map(bk => bk.id));
-  }, [matchedBookmarks]);
+    return new Set(groupMatchedBookmarks.map(bk => bk.id));
+  }, [groupMatchedBookmarks]);
 
   // Identify folders that contain matched bookmarks in their subtree
   const matchedFolderIds = useMemo(() => {
     const ids = new Set<string>();
-    matchedBookmarks.forEach((bk) => {
+    groupMatchedBookmarks.forEach((bk) => {
       let currentId = parentMap[bk.id];
       while (currentId) {
         if (ids.has(currentId)) break; // already traversed
@@ -48,11 +64,11 @@ export function useDisplayBookmarks(
       }
     });
     return ids;
-  }, [parentMap, matchedBookmarks]);
+  }, [parentMap, groupMatchedBookmarks]);
 
   const folderCounts = useMemo(() => {
     const counts: Record<string, number> = {};
-    matchedBookmarks.forEach((bk) => {
+    groupMatchedBookmarks.forEach((bk) => {
       let currentId = parentMap[bk.id];
       while (currentId) {
         counts[currentId] = (counts[currentId] || 0) + 1;
@@ -60,15 +76,15 @@ export function useDisplayBookmarks(
       }
     });
     return counts;
-  }, [parentMap, matchedBookmarks]);
+  }, [parentMap, groupMatchedBookmarks]);
 
   const displayItems = useMemo(() => {
     const query = searchQuery.toLowerCase();
     let items: DisplayItem[] = [];
 
-    // 1. If searching, show flattened results from matchedBookmarks
+    // 1. If searching, show flattened results from groupMatchedBookmarks
     if (query) {
-      items = matchedBookmarks
+      items = groupMatchedBookmarks
         .filter((bk) =>
           bk.title.toLowerCase().includes(query) ||
           (bk.url || "").toLowerCase().includes(query)
@@ -77,7 +93,7 @@ export function useDisplayBookmarks(
     }
     // 2. If 'All Bookmarks', show all matched bookmarks flattened
     else if (selectedFolderId === "all") {
-      items = matchedBookmarks.map((bk) => ({ type: "bookmark", data: bk }));
+      items = groupMatchedBookmarks.map((bk) => ({ type: "bookmark", data: bk }));
     }
     // 3. Explorer view: show direct children of the selected folder
     else {
@@ -113,7 +129,7 @@ export function useDisplayBookmarks(
     return items;
   }, [
     selectedFolderId,
-    matchedBookmarks,
+    groupMatchedBookmarks,
     matchedBookmarkIds,
     searchQuery,
     bookmarkMap,

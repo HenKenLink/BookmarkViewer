@@ -29,6 +29,12 @@ export type FetchTask = {
 
 export type ResultType = "cover_url" | "video_url";
 
+export type ConfigGroup = {
+  id: string;
+  name: string;
+  configIds: number[];
+};
+
 export type FetchConfig = {
   id: number;
   name: string;
@@ -55,6 +61,7 @@ export type Setting = {
   enableAnimations: boolean;
   sidebarOpen: boolean;
   selectedFolderId: string;
+  selectedConfigGroupId?: string;
   expandedFolderIds: string[];
   pageModeConcurrency: number;
   fastModeConcurrency: number;
@@ -76,4 +83,5 @@ export type Setting = {
   foldersPosition: "top" | "bottom" | "mixed";
   urlFilters: string[];
   clickAction: "popup" | "options";
+  configGroups?: ConfigGroup[];
 };

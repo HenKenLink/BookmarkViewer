@@ -23,6 +23,8 @@ import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import StarIcon from "@mui/icons-material/Star";
 import StarBorderIcon from "@mui/icons-material/StarBorder";
+import GroupWorkIcon from "@mui/icons-material/GroupWork";
+import FolderSpecialIcon from "@mui/icons-material/FolderSpecial";
 import { BookmarkTreeNode, Setting } from "../types";
 import { ContextMenu, ContextMenuItem } from "@/entrypoints/viewer/Components/ContextMenu";
 
@@ -31,6 +33,8 @@ export interface SharedFolderTreeProps {
   matchedBookmarks: BookmarkTreeNode[];
   selectedFolderId: string;
   setSelectedFolderId: (id: string) => void;
+  selectedConfigGroupId?: string;
+  setSelectedConfigGroupId?: (id: string) => void;
   expandedFolderIds: string[];
   setExpandedFolderIds: (ids: string[]) => void;
   setting: Setting;
@@ -217,6 +221,8 @@ export const SharedFolderTree: React.FC<SharedFolderTreeProps> = ({
   matchedBookmarks,
   selectedFolderId,
   setSelectedFolderId,
+  selectedConfigGroupId = "all",
+  setSelectedConfigGroupId,
   expandedFolderIds,
   setExpandedFolderIds,
   setting,
@@ -229,8 +235,10 @@ export const SharedFolderTree: React.FC<SharedFolderTreeProps> = ({
 }) => {
   const favoriteFolderIds = setting.favoriteFolderIds || [];
   const favoriteFolderAliases = setting.favoriteFolderAliases || {};
+  const configGroups = setting.configGroups || [];
 
   const [favoritesExpanded, setFavoritesExpanded] = useState(true);
+  const [groupsExpanded, setGroupsExpanded] = useState(true);
 
   const [favContextMenu, setFavContextMenu] = useState<{
     mouseX: number;
@@ -367,13 +375,71 @@ export const SharedFolderTree: React.FC<SharedFolderTreeProps> = ({
         <ListItemText primary="All Bookmarks" primaryTypographyProps={{ variant: "body2", fontWeight: selectedFolderId === "all" ? 600 : 500 }} />
       </ListItemButton>
 
+      {setSelectedConfigGroupId && (
+        <Box sx={{ mb: 2 }}>
+          <ListItemButton
+            onClick={() => setGroupsExpanded(!groupsExpanded)}
+            sx={{ px: 2, py: 0.5, "&:hover": { backgroundColor: "transparent" } }}
+          >
+            <Typography variant="overline" sx={{ color: "text.secondary", fontWeight: 600, display: "block", flexGrow: 1 }}>
+              CONFIG GROUPS
+            </Typography>
+            {groupsExpanded ? <ExpandLess fontSize="small" sx={{ color: "text.secondary" }} /> : <ExpandMore fontSize="small" sx={{ color: "text.secondary" }} />}
+          </ListItemButton>
+          <Collapse in={groupsExpanded} timeout="auto" unmountOnExit>
+            <List component="div" disablePadding>
+              {configGroups.map((group) => (
+                <ListItemButton
+                  key={`group-${group.id}`}
+                  selected={selectedConfigGroupId === group.id}
+                  onClick={() => {
+                    if (selectedConfigGroupId === group.id) {
+                      setSelectedConfigGroupId("all");
+                    } else {
+                      setSelectedConfigGroupId(group.id);
+                    }
+                  }}
+                  sx={{
+                    py: 0.8,
+                    borderRadius: 2,
+                    mb: 0.5,
+                    transition: "all 0.2s ease",
+                    "&:hover": {
+                      backgroundColor: (theme) => alpha(theme.palette.secondary.main, theme.palette.mode === 'light' ? 0.08 : 0.15),
+                      transform: "translateX(4px)",
+                      "& .MuiListItemIcon-root": { color: "secondary.main" }
+                    },
+                    "&.Mui-selected": {
+                      backgroundColor: (theme) => theme.palette.mode === 'light' ? "secondary.main" : "secondary.dark",
+                      color: "white",
+                      fontWeight: 600,
+                      boxShadow: "0 2px 8px rgba(156, 39, 176, 0.3)",
+                      "&:hover": {
+                        backgroundColor: (theme) => theme.palette.mode === 'light' ? "secondary.dark" : "secondary.main",
+                      },
+                      "& .MuiListItemIcon-root": { color: "white" },
+                      "& .MuiListItemText-primary": { color: "white" }
+                    }
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 32, color: "secondary.main" }}>
+                    <FolderSpecialIcon fontSize="small" />
+                  </ListItemIcon>
+                  <ListItemText primary={group.name} primaryTypographyProps={{ variant: "body2", fontWeight: selectedConfigGroupId === group.id ? 600 : 500, noWrap: true, sx: { fontSize: '0.8rem' } }} />
+                </ListItemButton>
+              ))}
+            </List>
+          </Collapse>
+        </Box>
+      )}
+
       {favoriteFolderIds.length > 0 && (
         <Box sx={{ mb: 2 }}>
           <ListItemButton
             onClick={() => setFavoritesExpanded(!favoritesExpanded)}
             sx={{ px: 2, py: 0.5, "&:hover": { backgroundColor: "transparent" } }}
           >
-            <Typography variant="overline" sx={{ color: "text.secondary", fontWeight: 600, display: "block", flexGrow: 1 }}>
+            <Typography variant="overline" sx={{ color: "text.secondary", fontWeight: 600, display: "block", flexGrow: 1, fontSize: '0.65rem' }}>
               FAVORITES
             </Typography>
             {favoritesExpanded ? <ExpandLess fontSize="small" sx={{ color: "text.secondary" }} /> : <ExpandMore fontSize="small" sx={{ color: "text.secondary" }} />}
@@ -391,7 +457,7 @@ export const SharedFolderTree: React.FC<SharedFolderTreeProps> = ({
                     onClick={() => setSelectedFolderId(id)}
                     onContextMenu={(e) => handleFavContextMenu(e, id)}
                     sx={{
-                      py: 1,
+                      py: 0.6,
                       borderRadius: 2,
                       mb: 0.5,
                       transition: "all 0.2s ease",
@@ -416,7 +482,7 @@ export const SharedFolderTree: React.FC<SharedFolderTreeProps> = ({
                     <ListItemIcon sx={{ minWidth: 32, color: "warning.main" }}>
                       <StarIcon fontSize="small" />
                     </ListItemIcon>
-                    <ListItemText primary={displayName} primaryTypographyProps={{ variant: "body2", fontWeight: selectedFolderId === id ? 600 : 500, noWrap: true }} />
+                    <ListItemText primary={displayName} primaryTypographyProps={{ variant: "body2", fontWeight: selectedFolderId === id ? 600 : 500, noWrap: true, sx: { fontSize: '0.8rem' } }} />
                   </ListItemButton>
                 );
               })}
@@ -425,7 +491,7 @@ export const SharedFolderTree: React.FC<SharedFolderTreeProps> = ({
         </Box>
       )}
 
-      <Typography variant="overline" sx={{ px: 2, color: "text.secondary", fontWeight: 600, display: "block", mb: 0.5 }}>
+      <Typography variant="overline" sx={{ px: 2, color: "text.secondary", fontWeight: 600, display: "block", mb: 0.5, fontSize: '0.65rem' }}>
         FOLDERS
       </Typography>
 

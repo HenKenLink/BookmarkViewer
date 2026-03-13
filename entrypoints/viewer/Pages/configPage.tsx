@@ -16,6 +16,14 @@ import {
   alpha,
   Paper,
   Grow,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControlLabel,
+  FormGroup,
 } from "@mui/material";
 
 import LanguageIcon from "@mui/icons-material/Language";
@@ -27,8 +35,11 @@ import CloseIcon from "@mui/icons-material/Close";
 import ArrowForwardIosIcon from "@mui/icons-material/ArrowForwardIos";
 import SettingsIcon from "@mui/icons-material/Settings";
 import SearchIcon from "@mui/icons-material/Search";
+import GroupWorkIcon from "@mui/icons-material/GroupWork";
+import EditIcon from "@mui/icons-material/Edit";
 import { Link, useNavigate } from "react-router-dom";
 import { styled, keyframes } from "@mui/material/styles";
+import { ConfigGroup } from "../../global/types";
 
 
 
@@ -165,14 +176,67 @@ const EmptyStateBox = styled(Box)(({ theme }) => ({
 }));
 
 export function ConfigPage() {
+  const [activeTab, setActiveTab] = useState(0);
   const [isMutiSelect, setIsMutiSelect] = useState<boolean>(false);
   const [selectedItemList, setSelectedItemList] = useState<number[]>([]);
   const [searchQuery, setSearchQuery] = useState<string>("");
+  
+  // Group Dialog State
+  const [groupDialogOpen, setGroupDialogOpen] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<ConfigGroup | null>(null);
+  const [groupName, setGroupName] = useState("");
+  const [selectedConfigIds, setSelectedConfigIds] = useState<number[]>([]);
 
   const configList = useStore((state) => state.fetchConfigList);
   const delFetchConfig = useStore((state) => state.delFetchConfig);
   const setting = useStore((state) => state.setting);
+  const setSetting = useStore((state) => state.setSetting);
   const navigate = useNavigate();
+
+  const handleOpenGroupDialog = (group?: ConfigGroup) => {
+    if (group) {
+      setEditingGroup(group);
+      setGroupName(group.name);
+      setSelectedConfigIds(group.configIds);
+    } else {
+      setEditingGroup(null);
+      setGroupName("");
+      setSelectedConfigIds([]);
+    }
+    setGroupDialogOpen(true);
+  };
+
+  const handleSaveGroup = async () => {
+    if (!groupName.trim()) {
+      toast.error("Group name is required");
+      return;
+    }
+
+    const currentGroups = setting.configGroups || [];
+    let newGroups;
+
+    if (editingGroup) {
+      newGroups = currentGroups.map(g => g.id === editingGroup.id ? { ...g, name: groupName, configIds: selectedConfigIds } : g);
+    } else {
+      const newGroup: ConfigGroup = {
+        id: Date.now().toString(),
+        name: groupName,
+        configIds: selectedConfigIds
+      };
+      newGroups = [...currentGroups, newGroup];
+    }
+
+    await setSetting({ configGroups: newGroups });
+    toast.success(`Group ${editingGroup ? 'updated' : 'created'} successfully`);
+    setGroupDialogOpen(false);
+  };
+
+  const handleDeleteGroup = async (id: string) => {
+    const currentGroups = setting.configGroups || [];
+    const newGroups = currentGroups.filter(g => g.id !== id);
+    await setSetting({ configGroups: newGroups });
+    toast.success("Group deleted");
+  };
 
   const configPageNavigate = (id: number) => {
     navigate(`/config/${id}`);
@@ -225,7 +289,7 @@ export function ConfigPage() {
               fontWeight: 500,
             }}
           >
-            Manage your fetch configurations • {configList.length} total
+            {activeTab === 0 ? `Manage your fetch configurations • ${configList.length} total` : `Organize configurations into groups • ${setting.configGroups?.length || 0} total`}
           </Typography>
         </Box>
 
@@ -239,11 +303,73 @@ export function ConfigPage() {
             justifyContent: { xs: "flex-start", sm: "flex-end" }
           }}
         >
-          {!isMutiSelect ? (
+          {activeTab === 0 ? (
+            <>
+              {!isMutiSelect ? (
+                <ActionButton
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={() => navigate(`/config/new`)}
+                  sx={{
+                    background: "rgba(255, 255, 255, 0.95)",
+                    color: "primary.main",
+                    "&:hover": {
+                      background: "white",
+                    },
+                  }}
+                >
+                  Add New
+                </ActionButton>
+              ) : (
+                <ActionButton
+                  variant="contained"
+                  color="error"
+                  startIcon={<DeleteIcon />}
+                  disabled={selectedItemList.length === 0}
+                  onClick={async () => {
+                    await delFetchConfig(selectedItemList);
+                    toast.success("Config deleted successfully");
+                    setSelectedItemList([]);
+                    setIsMutiSelect(false);
+                  }}
+                  sx={{
+                    background: "rgba(255, 255, 255, 0.95)",
+                    color: "error.main",
+                    "&:hover": {
+                      background: "white",
+                    },
+                  }}
+                >
+                  Delete ({selectedItemList.length})
+                </ActionButton>
+              )}
+
+              <ActionButton
+                variant="outlined"
+                startIcon={isMutiSelect ? <CloseIcon /> : <CheckIcon />}
+                onClick={() => {
+                  setIsMutiSelect(!isMutiSelect);
+                  if (!isMutiSelect) {
+                    setSelectedItemList([]);
+                  }
+                }}
+                sx={{
+                  borderColor: "rgba(255, 255, 255, 0.5)",
+                  color: "white",
+                  "&:hover": {
+                    borderColor: "white",
+                    background: "rgba(255, 255, 255, 0.1)",
+                  },
+                }}
+              >
+                {isMutiSelect ? "Cancel" : "Select"}
+              </ActionButton>
+            </>
+          ) : (
             <ActionButton
               variant="contained"
               startIcon={<AddIcon />}
-              onClick={() => navigate(`/config/new`)}
+              onClick={() => handleOpenGroupDialog()}
               sx={{
                 background: "rgba(255, 255, 255, 0.95)",
                 color: "primary.main",
@@ -252,58 +378,38 @@ export function ConfigPage() {
                 },
               }}
             >
-              Add New
-            </ActionButton>
-          ) : (
-            <ActionButton
-              variant="contained"
-              color="error"
-              startIcon={<DeleteIcon />}
-              disabled={selectedItemList.length === 0}
-              onClick={async () => {
-                await delFetchConfig(selectedItemList);
-                toast.success("Config deleted successfully");
-                setSelectedItemList([]);
-                setIsMutiSelect(false);
-              }}
-              sx={{
-                background: "rgba(255, 255, 255, 0.95)",
-                color: "error.main",
-                "&:hover": {
-                  background: "white",
-                },
-              }}
-            >
-              Delete ({selectedItemList.length})
+              Create Group
             </ActionButton>
           )}
-
-          <ActionButton
-            variant="outlined"
-            startIcon={isMutiSelect ? <CloseIcon /> : <CheckIcon />}
-            onClick={() => {
-              setIsMutiSelect(!isMutiSelect);
-              if (!isMutiSelect) {
-                setSelectedItemList([]);
-              }
-            }}
-            sx={{
-              borderColor: "rgba(255, 255, 255, 0.5)",
-              color: "white",
-              "&:hover": {
-                borderColor: "white",
-                background: "rgba(255, 255, 255, 0.1)",
-              },
-            }}
-          >
-            {isMutiSelect ? "Cancel" : "Select"}
-          </ActionButton>
         </Stack>
       </HeaderBox>
 
-      {/* Search Bar */}
-      {
-        configList.length > 0 && (
+      <Tabs 
+        value={activeTab} 
+        onChange={(_, v) => setActiveTab(v)}
+        sx={{ 
+          mb: 3,
+          minHeight: 40,
+          '& .MuiTab-root': {
+            minHeight: 40,
+            fontSize: '0.8rem',
+            py: 1,
+            '& .MuiSvgIcon-root': {
+              fontSize: '1.1rem',
+              mb: '0px !important'
+            }
+          }
+        }}
+      >
+        <Tab icon={<LanguageIcon />} label="Configs" iconPosition="start" />
+        <Tab icon={<GroupWorkIcon />} label="Groups" iconPosition="start" />
+      </Tabs>
+
+      {activeTab === 0 ? (
+        <>
+          {/* Search Bar */}
+          {
+            configList.length > 0 && (
           <Paper
             elevation={0}
             sx={{
@@ -548,6 +654,112 @@ export function ConfigPage() {
           })
         )}
       </Stack>
-    </Box >
-  );
+    </>
+  ) : (
+    <Stack spacing={2}>
+      {(setting.configGroups || []).length === 0 ? (
+        <EmptyStateBox>
+          <GroupWorkIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+          <Typography variant="h6" color="text.secondary" fontWeight={600}>
+            No groups yet
+          </Typography>
+          <Typography variant="body2" color="text.disabled" sx={{ mt: 1, mb: 3 }}>
+            Create a group to organize your configurations
+          </Typography>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => handleOpenGroupDialog()}
+            sx={{ borderRadius: 3, px: 4 }}
+          >
+            Create Group
+          </Button>
+        </EmptyStateBox>
+      ) : (
+        (setting.configGroups || []).map((group) => (
+          <ConfigCard key={group.id} onClick={() => handleOpenGroupDialog(group)}>
+            <Box sx={{ p: 2.5, pl: 3, flexGrow: 1, display: "flex", flexDirection: "column", gap: 1.5 }}>
+              <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <Typography variant="h6" sx={{ fontWeight: 700, fontSize: "1.1rem" }}>
+                  {group.name}
+                </Typography>
+                <Box>
+                  <IconButton 
+                    size="small" 
+                    onClick={(e) => { e.stopPropagation(); handleOpenGroupDialog(group); }}
+                    sx={{ mr: 1 }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton 
+                    size="small" 
+                    color="error" 
+                    onClick={(e) => { e.stopPropagation(); handleDeleteGroup(group.id); }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Contains {group.configIds.filter(id => configList.some(c => c.id === id)).length} configuration(s)
+              </Typography>
+              <Stack direction="row" spacing={1} flexWrap="wrap" gap={1}>
+                {group.configIds.map(cid => {
+                  const cfg = configList.find(c => c.id === cid);
+                  return cfg ? <StyledChip key={cid} label={cfg.name} size="small" /> : null;
+                })}
+              </Stack>
+            </Box>
+          </ConfigCard>
+        ))
+      )}
+    </Stack>
+  )}
+
+  {/* Group Edit Dialog */}
+  <Dialog open={groupDialogOpen} onClose={() => setGroupDialogOpen(false)} maxWidth="sm" fullWidth>
+    <DialogTitle>{editingGroup ? "Edit Group" : "New Group"}</DialogTitle>
+    <DialogContent>
+      <Box sx={{ mt: 1, display: "flex", flexDirection: "column", gap: 3 }}>
+        <TextField
+          label="Group Name"
+          fullWidth
+          value={groupName}
+          onChange={(e) => setGroupName(e.target.value)}
+          variant="outlined"
+        />
+        <Box>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
+            Select Configurations
+          </Typography>
+          <FormGroup sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1 }}>
+            {configList.map((config) => (
+              <FormControlLabel
+                key={config.id}
+                control={
+                  <Checkbox
+                    checked={selectedConfigIds.includes(config.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setSelectedConfigIds([...selectedConfigIds, config.id]);
+                      } else {
+                        setSelectedConfigIds(selectedConfigIds.filter(id => id !== config.id));
+                      }
+                    }}
+                  />
+                }
+                label={config.name}
+              />
+            ))}
+          </FormGroup>
+        </Box>
+      </Box>
+    </DialogContent>
+    <DialogActions sx={{ p: 2.5 }}>
+      <Button onClick={() => setGroupDialogOpen(false)}>Cancel</Button>
+      <Button variant="contained" onClick={handleSaveGroup}>Save Group</Button>
+    </DialogActions>
+  </Dialog>
+</Box >
+);
 }

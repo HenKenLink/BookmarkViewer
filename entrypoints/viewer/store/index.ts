@@ -197,11 +197,24 @@ export const actionSlice: StateCreator<Store, [], [], ViewerStoreAction> = (
       }
     );
     set(() => ({ fetchConfigList: newConfigList }));
+    
+    // Cascade delete config IDs from groups
+    const currentGroups = get().setting.configGroups || [];
+    const updatedGroups = currentGroups.map(group => ({
+      ...group,
+      configIds: group.configIds.filter(id => !delIdList.includes(id))
+    }));
+    if (JSON.stringify(currentGroups) !== JSON.stringify(updatedGroups)) {
+      await get().setSetting({ configGroups: updatedGroups });
+    }
+
     await browser.storage.local.set({ [CONFIGS_KEY]: newConfigList });
+    await get().matchBookmarks();
   },
   importConfigList: async (newConfigList) => {
     set(() => ({ fetchConfigList: newConfigList }));
     await browser.storage.local.set({ [CONFIGS_KEY]: newConfigList });
+    await get().matchBookmarks();
   },
   setFetchConfig: async (newConfig, isUpdate) => {
     let newConfigList: FetchConfig[] = [];
@@ -222,6 +235,7 @@ export const actionSlice: StateCreator<Store, [], [], ViewerStoreAction> = (
       fetchConfigList: newConfigList,
     }));
     await browser.storage.local.set({ [CONFIGS_KEY]: newConfigList });
+    await get().matchBookmarks();
   },
 });
 

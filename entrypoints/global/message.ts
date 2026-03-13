@@ -10,4 +10,5 @@ export enum messageId {
   // Cover status on matching pages
   coverStatusQuery = "coverStatusQuery",
   coverStatusResult = "coverStatusResult",
+  fetchFailed = "fetchFailed",
 }

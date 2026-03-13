@@ -24,6 +24,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import { SharedFolderTree } from "@/entrypoints/global/components/SharedFolderTree";
 import { PopupBookmarkCard } from "./Components/PopupBookmarkCard";
 import { usePopupStore } from "./store";
+import { toast, Toaster } from "sonner";
 import { BookmarkTreeNode, FetchConfig } from "@/entrypoints/global/types";
 import { messageId } from "@/entrypoints/global/message";
 import { SortControls } from "@/entrypoints/global/components/SortControls";
@@ -45,6 +46,9 @@ function PopupApp() {
   const fetchConfigList = usePopupStore((s) => s.fetchConfigList);
   const selectedFolderId = usePopupStore((s) => s.selectedFolderId);
   const setSelectedFolderId = usePopupStore((s) => s.setSelectedFolderId);
+  const selectedConfigGroupId = usePopupStore((s) => s.selectedConfigGroupId);
+  const setSelectedConfigGroupId = usePopupStore((s) => s.setSelectedConfigGroupId);
+  const bookmarkToConfigsMap = usePopupStore((s) => s.bookmarkToConfigsMap);
   const bookmarkMap = usePopupStore((s) => s.bookmarkMap);
   const bookmarkTree = usePopupStore((s) => s.bookmarkTree);
   const expandedFolderIds = usePopupStore((s) => s.expandedFolderIds);
@@ -69,7 +73,9 @@ function PopupApp() {
     bookmarkMap,
     selectedFolderId,
     searchQuery,
-    setting
+    setting,
+    selectedConfigGroupId,
+    bookmarkToConfigsMap
   );
 
   const displayBookmarks = useMemo(() => 
@@ -159,6 +165,15 @@ function PopupApp() {
         // Update active tab status if matches
         if (activeTabStatus?.url === message.pageUrl) {
           setActiveTabStatus(prev => prev ? { ...prev, hasCover: true, isFetching: false } : null);
+        }
+      } else if (message.type === messageId.fetchFailed) {
+        const bookmark = Object.values(bookmarkMap).find(b => b.url === message.pageUrl);
+        toast.error(`Failed to fetch cover: ${bookmark?.title || message.pageUrl}`, {
+          duration: 3000,
+        });
+        
+        if (activeTabStatus?.url === message.pageUrl) {
+          setActiveTabStatus(prev => prev ? { ...prev, isFetching: false } : null);
         }
       }
     };
@@ -257,6 +272,7 @@ function PopupApp() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
+      <Toaster />
       <Box
         sx={{
           display: "flex",
@@ -303,7 +319,7 @@ function PopupApp() {
                   variant="subtitle2"
                   sx={{ fontWeight: 700, color: "white", fontSize: "0.8rem" }}
                 >
-                  📁 Folders
+                  📁 Library
                 </Typography>
                 <Typography
                   variant="caption"
@@ -328,6 +344,8 @@ function PopupApp() {
                 matchedBookmarks={matchedBookmarks}
                 selectedFolderId={selectedFolderId}
                 setSelectedFolderId={setSelectedFolderId}
+                selectedConfigGroupId={selectedConfigGroupId}
+                setSelectedConfigGroupId={setSelectedConfigGroupId}
                 expandedFolderIds={expandedFolderIds}
                 setExpandedFolderIds={setExpandedFolderIds}
                 setting={setting}
