@@ -5,17 +5,19 @@ import {
   FetchConfig,
   LoadedImageMap,
   FetchTask,
+  BookmarkFetchItem,
 } from "../types";
-import { filterBookmarkByMatchPattern, checkBookmarksLoadStatus } from "../bookmarkUtils";
 import { SETTINGS_KEY, CONFIGS_KEY } from "../consts";
 
 export type BookmarkMap = Record<string, BookmarkTreeNode>;
+export type BookmarksByHost = Record<string, BookmarkTreeNode[]>;
 
 export type BookmarkSliceState = {
   setting: Setting;
   bookmarkTree: BookmarkTreeNode | null;
   bookmarkList: BookmarkTreeNode[];
   bookmarkMap: BookmarkMap;
+  bookmarksByHost: BookmarksByHost;
   matchedBookmarks: BookmarkTreeNode[];
   loadedImageMap: LoadedImageMap;
   fetchConfigList: FetchConfig[];
@@ -74,6 +76,7 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
   bookmarkTree: null,
   bookmarkList: [],
   bookmarkMap: {},
+  bookmarksByHost: {},
   matchedBookmarks: [],
   loadedImageMap: {},
   fetchConfigList: [],
@@ -115,7 +118,17 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
       };
       iterate(tree);
     }
-    set({ bookmarkTree: tree, bookmarkMap: map, bookmarkList: list });
+    // Build hostname index cache once to avoid repeated URL parsing in matchBookmarks
+    const byHost: BookmarksByHost = {};
+    for (const bk of list) {
+      if (!bk.url) continue;
+      try {
+        const host = new URL(bk.url).hostname;
+        if (!byHost[host]) byHost[host] = [];
+        byHost[host].push(bk);
+      } catch (_) {}
+    }
+    set({ bookmarkTree: tree, bookmarkMap: map, bookmarkList: list, bookmarksByHost: byHost });
   },
 
   loadFetchConfig: async () => {
@@ -131,7 +144,7 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
       return { matchedBookmarks: [], fetchTaskList: [] };
     }
 
-    // Optimization: Group configs by hostname for faster matching
+    // Group configs by hostname
     const configsByHost: Record<string, FetchConfig[]> = {};
     for (const config of configList) {
       let host = config.hostname;
@@ -142,58 +155,111 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
       configsByHost[host].push(config);
     }
 
-    const allMatchedBookmarks: BookmarkTreeNode[] = [];
-    const fetchTaskList: FetchTask[] = [];
-    const newLoadedImageMapAll: LoadedImageMap = {};
+    // Use cached hostname index (built once in loadBookmarkTree, not rebuilt every call)
+    const bookmarksByHost = get().bookmarksByHost;
 
-    // Group bookmarks by hostname once
-    const bookmarksByHost: Record<string, BookmarkTreeNode[]> = {};
-    for (const bk of bookmarkList) {
-      if (!bk.url) continue;
-      try {
-        const host = new URL(bk.url).hostname;
-        if (!bookmarksByHost[host]) bookmarksByHost[host] = [];
-        bookmarksByHost[host].push(bk);
-      } catch (_) {}
+    // Collect all URLs that need storage lookup (across all configs) in one pass
+    const loadedImageMap = get().loadedImageMap;
+    const urlsToFetch = new Set<string>();
+    for (const host in configsByHost) {
+      const bksAtHost = bookmarksByHost[host];
+      if (!bksAtHost) continue;
+      for (const bk of bksAtHost) {
+        if (bk.url && !loadedImageMap[bk.id]) {
+          urlsToFetch.add(bk.url);
+        }
+      }
     }
 
-    // Process matched hosts
+    // Single batched storage read for all URLs at once
+    let storageData: Record<string, any> = {};
+    if (urlsToFetch.size > 0) {
+      try {
+        storageData = await browser.storage.local.get(Array.from(urlsToFetch));
+      } catch (e) {
+        console.error("Error batch fetching from storage:", e);
+      }
+    }
+
+    // Build work items for all (host, config) pairs
+    const allMatchedBookmarks: BookmarkTreeNode[] = [];
+    const fetchTaskList: FetchTask[] = [];
+    // Collect (bookmarkId -> url) pairs that have storage data but no blob URL yet
+    const pendingBlobEntries: Array<{ bookmarkId: string; url: string }> = [];
+
     for (const host in configsByHost) {
       const bksAtHost = bookmarksByHost[host];
       if (!bksAtHost) continue;
 
       for (const config of configsByHost[host]) {
         const regex = config.regexPattern ? new RegExp(config.regexPattern) : null;
-        const matchedAtHost = regex 
+        const matchedAtHost = regex
           ? bksAtHost.filter(bk => regex.test(bk.url!))
           : bksAtHost;
-        
+
         if (matchedAtHost.length === 0) continue;
 
         allMatchedBookmarks.push(...matchedAtHost);
 
-        const { items, newLoadedImageMap } = await checkBookmarksLoadStatus(
-          matchedAtHost,
-          config.id,
-          get().loadedImageMap
-        );
-        Object.assign(newLoadedImageMapAll, newLoadedImageMap);
+        const unloadedItems: BookmarkFetchItem[] = [];
+        for (const bk of matchedAtHost) {
+          const purl = bk.url;
+          if (!purl) continue;
+          if (loadedImageMap[bk.id]) continue; // already loaded
+          const raw = storageData[purl];
+          if (raw && raw.length > 0) {
+            // Defer blob URL creation to idle time
+            pendingBlobEntries.push({ bookmarkId: bk.id, url: purl });
+          } else {
+            unloadedItems.push({ bookmarkId: bk.id, pageUrl: purl, configId: config.id, isLoaded: false });
+          }
+        }
 
-        const unloadedItems = items.filter((item) => !item.isLoaded);
         if (unloadedItems.length > 0) {
-          fetchTaskList.push({
-            config,
-            items: unloadedItems,
-          });
+          fetchTaskList.push({ config, items: unloadedItems });
         }
       }
     }
 
-    if (Object.keys(newLoadedImageMapAll).length > 0) {
-      get().updateLoadedImageMap(newLoadedImageMapAll);
+    // Schedule blob URL creation during browser idle time to avoid blocking the main thread
+    if (pendingBlobEntries.length > 0) {
+      const CHUNK_SIZE = 20;
+      const urlToBlobUrl: Record<string, string> = {};
+
+      const processChunk = (startIdx: number) => {
+        const chunk = pendingBlobEntries.slice(startIdx, startIdx + CHUNK_SIZE);
+        const newMap: LoadedImageMap = {};
+
+        for (const { bookmarkId, url } of chunk) {
+          if (!urlToBlobUrl[url]) {
+            const raw = storageData[url];
+            const buf = new Uint8Array(raw);
+            const blob = new Blob([buf.buffer], { type: "image/jpeg" });
+            urlToBlobUrl[url] = URL.createObjectURL(blob);
+          }
+          newMap[bookmarkId] = urlToBlobUrl[url];
+        }
+
+        get().updateLoadedImageMap(newMap);
+
+        const nextIdx = startIdx + CHUNK_SIZE;
+        if (nextIdx < pendingBlobEntries.length) {
+          if (typeof requestIdleCallback !== "undefined") {
+            requestIdleCallback(() => processChunk(nextIdx), { timeout: 2000 });
+          } else {
+            setTimeout(() => processChunk(nextIdx), 0);
+          }
+        }
+      };
+
+      if (typeof requestIdleCallback !== "undefined") {
+        requestIdleCallback(() => processChunk(0), { timeout: 2000 });
+      } else {
+        setTimeout(() => processChunk(0), 0);
+      }
     }
 
-    // Only update state if matchedBookmarks actually changed to prevent excessive re-renders
+    // Only update state if matchedBookmarks actually changed
     const currentMatched = get().matchedBookmarks;
     const isSameMatched = currentMatched.length === allMatchedBookmarks.length &&
       currentMatched.every((bk, idx) => bk.id === allMatchedBookmarks[idx].id);
@@ -201,8 +267,11 @@ export const createBookmarkSlice: StateCreator<BookmarkSlice, [], [], BookmarkSl
     const res = { matchedBookmarks: allMatchedBookmarks, fetchTaskList };
     if (!isSameMatched) {
       set(res as any);
+    } else {
+      // Always update fetchTaskList even if matched set is unchanged
+      set({ fetchTaskList } as any);
     }
-    
+
     return res;
   },
 

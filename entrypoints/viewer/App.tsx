@@ -34,15 +34,10 @@ const navItemList: NavItem[] = [
 
 export default function App() {
   useLoadBookmarks();
-  const getSetting = useStore((state) => state.getSetting);
   const setting = useStore((state) => state.setting);
 
   const [mode, setMode] = useState<"light" | "dark">("light");
   const theme = mode === "light" ? lightTheme : darkTheme;
-
-  useEffect(() => {
-    getSetting();
-  }, []);
 
   useEffect(() => {
     setMode(setting.darkMode ? "dark" : "light");

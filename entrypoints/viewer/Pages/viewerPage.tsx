@@ -67,9 +67,6 @@ function FetchProgress({ isFetching, progress, total, onStop }: { isFetching: bo
 }
 
 export function ViewerPage() {
-  const loadFetchConfig = useStore((s) => s.loadFetchConfig);
-  const bookmarkList = useStore((s) => s.bookmarkList);
-  const matchBookmarks = useStore((s) => s.matchBookmarks);
   const matchedBookmarks = useStore((s) => s.matchedBookmarks);
   const fetchTaskList = useStore((s) => s.fetchTaskList);
   const isFetching = useStore((s) => s.isFetching);
@@ -84,7 +81,6 @@ export function ViewerPage() {
   const bookmarkMap = useStore((s) => s.bookmarkMap);
   const forceFetchThumbnails = useStore((s) => s.forceFetchThumbnails);
   const isLoadingBookmarks = useStore((s) => s.isLoadingBookmarks);
-  const setLoadingBookmarks = useStore((s) => s.setLoadingBookmarks);
   const isSelectionMode = useStore((s) => s.isSelectionMode);
   const setIsSelectionMode = useStore((s) => s.setIsSelectionMode);
   const setting = useStore((s) => s.setting);
@@ -99,7 +95,6 @@ export function ViewerPage() {
   const getAllBookmarksInFolderAction = useStore((s) => s.getAllBookmarksInFolderAction);
   const clearSelection = useStore((s) => s.clearSelection);
   const downloadMultipleThumbnailsAction = useStore((s) => s.downloadMultipleThumbnailsAction);
-  const fetchConfigList = useStore((s) => s.fetchConfigList);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -142,23 +137,7 @@ export function ViewerPage() {
     return () => observer.disconnect();
   }, [displayItems.length, renderedLimit]);
 
-  const startMatchBookmarks = async () => {
-    const hasItems = useStore.getState().matchedBookmarks.length > 0;
-    if (!hasItems) {
-      setLoadingBookmarks(true);
-    }
-    try {
-      await matchBookmarks();
-    } finally {
-      setLoadingBookmarks(false);
-    }
-  };
-
   useEffect(() => {
-    const loadConfig = async () => {
-      await loadFetchConfig();
-    };
-    loadConfig();
     browser.runtime.onMessage.addListener(onMessageListener);
 
     // Global cleanup on window unload to prevent memory leaks
@@ -177,10 +156,6 @@ export function ViewerPage() {
       window.removeEventListener("beforeunload", handleUnload);
     };
   }, []);
-
-  useEffect(() => {
-    startMatchBookmarks();
-  }, [bookmarkList, fetchConfigList]);
 
   const onMessageListener = async (message: any) => {
     switch (message.type) {
