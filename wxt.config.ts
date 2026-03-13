@@ -17,6 +17,9 @@ export default defineConfig({
       __DEV__: configEnv.mode === "development",
       __CHROME__: configEnv.browser === "chrome",
     },
+    build: {
+      chunkSizeWarningLimit: 1000,
+    },
   }),
   manifest: {
     name: "Bookmark Viewer",

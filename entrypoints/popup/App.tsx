@@ -13,8 +13,7 @@ import {
 } from "@mui/material";
 import { ThemeProvider, alpha } from "@mui/material/styles";
 import { lightTheme, darkTheme } from "../global/theme";
-import { PhotoProvider } from "react-photo-view";
-import "react-photo-view/dist/react-photo-view.css";
+import { LazyPhotoProvider } from "../global/components/LazyPhotoProvider";
 import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import MenuIcon from "@mui/icons-material/Menu";
@@ -321,7 +320,7 @@ function PopupApp() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <PhotoProvider maskOpacity={0.8} bannerVisible={false} speed={() => 0}>
+      <LazyPhotoProvider maskOpacity={0.8} bannerVisible={false} speed={() => 0}>
         <Toaster />
         <Box
           sx={{
@@ -594,7 +593,7 @@ function PopupApp() {
             </Box>
           </Box>
         </Box>
-      </PhotoProvider>
+      </LazyPhotoProvider>
     </ThemeProvider>
   );
 }

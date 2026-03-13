@@ -12,8 +12,7 @@ import { NavItem } from "@/entrypoints/global/types";
 
 import { ThemeProvider } from "@mui/material/styles";
 import { lightTheme, darkTheme } from "../global/theme";
-import { PhotoProvider } from "react-photo-view";
-import "react-photo-view/dist/react-photo-view.css";
+import { LazyPhotoProvider } from "../global/components/LazyPhotoProvider";
 
 import { useStore } from "./store";
 import { Toaster } from "sonner";
@@ -77,7 +76,7 @@ export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <PhotoProvider
+      <LazyPhotoProvider
         maskOpacity={0.8}
         bannerVisible={false}
         speed={() => 0}
@@ -100,7 +99,7 @@ export default function App() {
             </Routes>
           </Box>
         </Router>
-      </PhotoProvider>
+      </LazyPhotoProvider>
     </ThemeProvider>
   );
 }

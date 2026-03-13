@@ -24,7 +24,7 @@ import { ContextMenu, ContextMenuItem } from "./ContextMenu";
 import { useStore } from "../store";
 import { BookmarkCardBase } from "../../global/components/BookmarkCardBase";
 
-import { PhotoView } from "react-photo-view";
+import { LazyPhotoView } from "../../global/components/LazyPhotoProvider";
 
 interface ImageTextCardProps {
   bookmarkId: string;
@@ -228,14 +228,14 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
 
           <ImageContainer>
             {image ? (
-              <PhotoView src={image}>
+              <LazyPhotoView src={image}>
                 <StyledCardMedia
                   component="img"
                   image={image}
                   alt={title}
                   sx={{ cursor: "zoom-in" }}
                 />
-              </PhotoView>
+              </LazyPhotoView>
             ) : isInView ? (
               <Box
                 sx={{

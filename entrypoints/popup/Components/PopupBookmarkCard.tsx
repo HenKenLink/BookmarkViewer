@@ -4,7 +4,7 @@ import { alpha } from "@mui/material/styles";
 import LanguageIcon from "@mui/icons-material/Language";
 import { usePopupStore } from "../store";
 import { BookmarkCardBase } from "../../global/components/BookmarkCardBase";
-import { PhotoView } from "react-photo-view";
+import { LazyPhotoView } from "../../global/components/LazyPhotoProvider";
 
 interface PopupBookmarkCardProps {
   bookmarkId: string;
@@ -72,14 +72,14 @@ export const PopupBookmarkCard: React.FC<PopupBookmarkCardProps> = React.memo(
             >
               {isInView ? (
                 image ? (
-                  <PhotoView src={image}>
+                  <LazyPhotoView src={image}>
                     <Box
                       component="img"
                       src={image}
                       alt={title}
                       sx={{ width: "100%", height: "100%", objectFit: "cover", cursor: "zoom-in" }}
                     />
-                  </PhotoView>
+                  </LazyPhotoView>
                 ) : (
                   <Box
                     sx={{
