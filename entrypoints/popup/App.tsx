@@ -114,9 +114,8 @@ function PopupApp() {
     const init = async () => {
       setLoadingBookmarks(true);
       try {
-        await getSetting();
-        await loadBookmarkTree();
-        await loadFetchConfig();
+        // Parallelize initialization for faster popup opening
+        await Promise.all([getSetting(), loadBookmarkTree(), loadFetchConfig()]);
       } finally {
         setLoadingBookmarks(false);
       }

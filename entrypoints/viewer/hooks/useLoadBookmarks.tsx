@@ -6,6 +6,7 @@ export const useLoadBookmarks = () => {
   const loadFetchConfig = useStore((state) => state.loadFetchConfig);
   const matchBookmarks = useStore((state) => state.matchBookmarks);
   const setLoadingBookmarks = useStore((state) => state.setLoadingBookmarks);
+  const getSetting = useStore((state) => state.getSetting);
 
   useEffect(() => {
     const initialize = async () => {
@@ -14,8 +15,9 @@ export const useLoadBookmarks = () => {
         setLoadingBookmarks(true);
       }
       try {
-        // Parallelize: load bookmark tree, fetch config, and settings concurrently
-        await Promise.all([loadBookmarkTree(), loadFetchConfig()]);
+        // Parallelize: load settings, bookmark tree, and fetch config concurrently
+        // Loading settings is important to restore last selected folder and expanded state
+        await Promise.all([getSetting(), loadBookmarkTree(), loadFetchConfig()]);
         await matchBookmarks();
       } finally {
         setLoadingBookmarks(false);
