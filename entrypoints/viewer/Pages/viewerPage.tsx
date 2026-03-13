@@ -32,6 +32,7 @@ import ChecklistIcon from "@mui/icons-material/Checklist";
 import StarIcon from "@mui/icons-material/Star";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import React, { useRef } from "react";
 
 async function startGetThumb(fetchTaskList: FetchTask[]): Promise<void> {
@@ -291,6 +292,29 @@ export function ViewerPage() {
   // const handleBatchFetchThumbs = async () => { ... }
   // const handleBatchDownloadThumbs = async () => { ... }
 
+  const handleBack = () => {
+    if (selectedFolderId === "all") return;
+    const currentFolder = bookmarkMap[selectedFolderId];
+    if (currentFolder && currentFolder.parentId && currentFolder.parentId !== "0") {
+      setSelectedFolderId(currentFolder.parentId);
+    } else {
+      setSelectedFolderId("all");
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        handleBack();
+      }
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [selectedFolderId, bookmarkMap]);
+
   return (
     <Box sx={{ display: "flex", minHeight: "100vh" }}>
       {/* Sidebar for Desktop */}
@@ -423,6 +447,11 @@ export function ViewerPage() {
             >
               <MenuIcon />
             </IconButton>
+            {selectedFolderId !== "all" && (
+              <IconButton onClick={handleBack} sx={{ mr: 1 }} size="small">
+                <ArrowBackIcon />
+              </IconButton>
+            )}
             <Typography variant="h5" sx={{ fontWeight: 700, color: "text.primary" }}>
               Captured
             </Typography>

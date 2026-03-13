@@ -16,6 +16,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import ClearIcon from "@mui/icons-material/Clear";
 import MenuIcon from "@mui/icons-material/Menu";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import SettingsIcon from "@mui/icons-material/Settings";
 
@@ -263,6 +264,29 @@ function PopupApp() {
     setting.foldersPosition
   ]);
 
+  const handleBack = () => {
+    if (selectedFolderId === "all") return;
+    const currentFolder = bookmarkMap[selectedFolderId];
+    if (currentFolder && currentFolder.parentId && currentFolder.parentId !== "0") {
+      setSelectedFolderId(currentFolder.parentId);
+    } else {
+      setSelectedFolderId("all");
+    }
+  };
+
+  useEffect(() => {
+    const handleMouseUp = (e: MouseEvent) => {
+      if (e.button === 3) {
+        e.preventDefault();
+        handleBack();
+      }
+    };
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [selectedFolderId, bookmarkMap]);
+
   const openOptionsPage = async () => {
     const url = browser.runtime.getURL("/viewer.html");
     const tabs = await browser.tabs.query({ url });
@@ -442,6 +466,11 @@ function PopupApp() {
               bgcolor: "background.paper",
             }}
           >
+            {selectedFolderId !== "all" && (
+              <IconButton size="small" onClick={handleBack} sx={{ mr: 1, p: 0.5 }}>
+                <ArrowBackIcon sx={{ fontSize: 16 }} />
+              </IconButton>
+            )}
             <Typography variant="caption" sx={{ color: "text.secondary", fontSize: "0.7rem" }}>
               {selectedFolderId === "all" ? "All Bookmarks" : bookmarkMap[selectedFolderId]?.title || "Folder"} · {displayItems.length} items
             </Typography>

@@ -22,6 +22,7 @@ import {
 } from "@mui/material";
 import { useStore } from "../store";
 import { exportAll, importFile } from "../utils/exportImport";
+import { toast } from "sonner";
 import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 import UploadFileIcon from "@mui/icons-material/UploadFile";
 import DownloadIcon from "@mui/icons-material/Download";
@@ -54,7 +55,9 @@ export function SettingsPage() {
     };
 
     const handleExport = async () => {
-        await exportAll();
+        const toastId = toast.loading("Preparing backup...");
+        await exportAll((msg) => toast.loading(msg, { id: toastId }));
+        toast.success("Backup downloaded successfully.", { id: toastId });
     };
 
     const handleImportClick = () => {
@@ -63,7 +66,10 @@ export function SettingsPage() {
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
-            await importFile(e.target.files[0], bookmarkMap, (msg) => alert(msg));
+            const toastId = toast.loading("Starting import...");
+            await importFile(e.target.files[0], bookmarkMap, (msg) => {
+                toast.loading(msg, { id: toastId });
+            });
             if (fileInputRef.current) fileInputRef.current.value = "";
         }
     };

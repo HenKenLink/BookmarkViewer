@@ -117,8 +117,7 @@ const TreeItem: React.FC<TreeItemProps> = ({ node, level, selectedId, expandedId
             label: isFavorite ? "Remove from Favorites" : "Add to Favorites",
             icon: isFavorite ? <StarIcon fontSize="small" sx={{ color: "warning.main" }} /> : <StarBorderIcon fontSize="small" />,
             onClick: handleToggleFavorite,
-            divider: true,
-            sx: { mt: 1 }
+            divider: true
         },
     ];
 

@@ -7,8 +7,8 @@ export function sortBookmarks<T extends BookmarkTreeNode | { type: "bookmark" | 
   foldersPosition: "top" | "bottom" | "mixed"
 ): T[] {
   return [...items].sort((a, b) => {
-    const nodeA = "type" in a ? a.data : a;
-    const nodeB = "type" in b ? b.data : b;
+    const nodeA = "data" in a ? (a as any).data : a;
+    const nodeB = "data" in b ? (b as any).data : b;
 
     const isFolderA = !nodeA.url;
     const isFolderB = !nodeB.url;
@@ -40,7 +40,7 @@ export function filterByUrlDomains<T extends BookmarkTreeNode | { type: "bookmar
   if (!urlFilters || urlFilters.length === 0) return items;
 
   return items.filter((item) => {
-    const node = "type" in item ? item.data : item;
+    const node = "data" in item ? (item as any).data : item;
     
     // Always keep folders if they are in the list (e.g., in Explorer view)
     if (!node.url) return true;
