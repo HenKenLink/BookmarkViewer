@@ -14,13 +14,13 @@ interface PopupBookmarkCardProps {
 
 export const PopupBookmarkCard: React.FC<PopupBookmarkCardProps> = React.memo(
   ({ bookmarkId, title, url }) => {
-    const image = usePopupStore((s) => s.loadedImageMap[bookmarkId]);
+    const coverExists = usePopupStore((s) => s.coverExistsMap[url]);
 
     return (
       <BookmarkCardBase
         url={url}
-        image={image}
-        renderCard={({ isInView, cardRef, hostname }) => (
+        coverExists={coverExists}
+        renderCard={({ isInView, cardRef, hostname, image }) => (
           <Box
             ref={cardRef}
             component="a"

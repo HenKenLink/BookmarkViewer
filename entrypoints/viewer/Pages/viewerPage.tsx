@@ -76,7 +76,7 @@ export function ViewerPage() {
   const fetchTotal = useStore((s) => s.fetchTotal);
   const setFetchStatus = useStore((s) => s.setFetchStatus);
   const updateFetchProgress = useStore((s) => s.updateFetchProgress);
-  const loadSingleThumb = useStore((s) => s.loadSingleThumb);
+  const updateCoverExistsMap = useStore((s) => s.updateCoverExistsMap);
   const stopFetching = useStore((s) => s.stopFetching);
   const bookmarkMap = useStore((s) => s.bookmarkMap);
   const forceFetchThumbnails = useStore((s) => s.forceFetchThumbnails);
@@ -271,7 +271,7 @@ export function ViewerPage() {
         break;
       case messageId.singleThumbFinished:
         if (message.pageUrl) {
-          await loadSingleThumb(message.pageUrl);
+          updateCoverExistsMap({ [message.pageUrl]: true });
         }
         if (message.progress) {
           updateFetchProgress(message.progress);

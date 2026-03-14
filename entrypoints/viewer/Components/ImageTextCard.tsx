@@ -71,7 +71,7 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
 }) => {
   const isSelected = useStore((state) => state.selectedBookmarkIds.includes(bookmarkId));
   const isSelectionMode = useStore((state) => state.isSelectionMode);
-  const image = useStore((state) => state.loadedImageMap[bookmarkId]);
+  const coverExists = useStore((state) => state.coverExistsMap[url] ?? false);
 
   const setIsSelectionMode = useStore((state) => state.setIsSelectionMode);
   const toggleBookmarkSelection = useStore((state) => state.toggleBookmarkSelection);
@@ -95,7 +95,7 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
   };
 
   const handleFetchThumb = async () => {
-    if (image) {
+    if (coverExists) {
       const confirmed = window.confirm("当前书签已有封面，是否强制重新获取？");
       if (!confirmed) return;
     }
@@ -154,7 +154,7 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
       label: "Download thumb",
       icon: <DownloadIcon fontSize="small" />,
       onClick: handleDownloadThumb,
-      disabled: !image,
+      disabled: !coverExists,
     },
     {
       label: "Upload thumb",
@@ -176,8 +176,8 @@ export const ImageTextCard: React.FC<ImageTextCardProps> = React.memo(({
   return (
     <BookmarkCardBase
       url={url}
-      image={image}
-      renderCard={({ isInView, cardRef, hostname }) => (
+      coverExists={coverExists}
+      renderCard={({ isInView, cardRef, hostname, image }) => (
         <CardItem
           ref={cardRef}
           onClick={handleCardClick}

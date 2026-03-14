@@ -85,3 +85,9 @@ export type Setting = {
   clickAction: "popup" | "options";
   configGroups?: ConfigGroup[];
 };
+
+export type MatchState = {
+  matchedBookmarkIds: string[];
+  bookmarkToConfigsMap: Record<string, number[]>;
+  coverExistsMap: Record<string, boolean>;
+};

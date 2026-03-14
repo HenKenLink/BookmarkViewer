@@ -1,9 +1,9 @@
 import { logger } from "../global/logger";
 import { messageId } from "../global/message";
-import { FetchTask, FetchConfig, BookmarkFetchItem, SelectorType, Setting, ScreenshotType } from "../global/types";
+import { FetchTask, FetchConfig, BookmarkFetchItem, SelectorType, Setting, ScreenshotType, MatchState, BookmarkTreeNode } from "../global/types";
 
 import { waitForTabLoad } from "../global/globalUtils";
-import { SETTINGS_KEY, CONFIGS_KEY } from "../global/consts";
+import { SETTINGS_KEY, CONFIGS_KEY, MATCH_STATE_KEY } from "../global/consts";
 
 type Thumb = {
   pageUrl: string;
@@ -28,6 +28,21 @@ const openUI = async () => {
   }
 };
 
+async function updateCoverExists(url: string, exists: boolean) {
+  try {
+    const raw = await browser.storage.local.get(MATCH_STATE_KEY);
+    const matchState = raw[MATCH_STATE_KEY] as MatchState | undefined;
+    if (matchState && matchState.coverExistsMap) {
+      if (matchState.coverExistsMap[url] !== exists) {
+        matchState.coverExistsMap[url] = exists;
+        await browser.storage.local.set({ [MATCH_STATE_KEY]: matchState });
+      }
+    }
+  } catch (e) {
+    logger.error("[Background] Failed to update coverExistsMap", e);
+  }
+}
+
 async function saveThumb(thumb: Thumb): Promise<boolean> {
   const thumbUrl = thumb.thumbUrl;
   const pageUrl = thumb.pageUrl;
@@ -43,6 +58,7 @@ async function saveThumb(thumb: Thumb): Promise<boolean> {
     await browser.storage.local.set({
       [pageUrl]: dataToSave,
     });
+    await updateCoverExists(pageUrl, true);
     return true;
   } catch (err) {
     logger.error(`[Background] Failed to download thumb from ${thumbUrl}`, err);
@@ -317,6 +333,108 @@ async function processScreenshotItem(pageUrl: string, config: FetchConfig, progr
   }
 }
 
+// ========== MATCH STATE COMPUTATION ==========
+
+let matchStateDebounceTimer: number | NodeJS.Timeout | null = null;
+
+async function computeAndSaveMatchState() {
+  try {
+    const [treeResult, configsRaw] = await Promise.all([
+      browser.bookmarks.getTree(),
+      browser.storage.local.get(CONFIGS_KEY)
+    ]);
+    const tree = treeResult[0];
+    const configs: FetchConfig[] = (configsRaw[CONFIGS_KEY] as FetchConfig[]) || [];
+
+    const bookmarkMap: Record<string, BookmarkTreeNode> = {};
+    const bookmarksByHost: Record<string, BookmarkTreeNode[]> = {};
+    const bookmarkList: BookmarkTreeNode[] = [];
+
+    const iterate = (node: BookmarkTreeNode) => {
+      if (node) {
+        bookmarkMap[node.id] = node;
+        bookmarkList.push(node);
+        if (node.children) node.children.forEach(iterate);
+      }
+    };
+    if (tree) iterate(tree);
+
+    for (const bk of bookmarkList) {
+      if (!bk.url) continue;
+      try {
+        const host = new URL(bk.url).hostname;
+        if (!bookmarksByHost[host]) bookmarksByHost[host] = [];
+        bookmarksByHost[host].push(bk);
+      } catch (_) {}
+    }
+
+    const configsByHost: Record<string, FetchConfig[]> = {};
+    for (const config of configs) {
+      let host = config.hostname;
+      if (host.includes("://")) {
+        try { host = new URL(host).hostname; } catch (_) {}
+      }
+      if (!configsByHost[host]) configsByHost[host] = [];
+      configsByHost[host].push(config);
+    }
+
+    const matchedBookmarkIds = new Set<string>();
+    const bookmarkToConfigsMap: Record<string, number[]> = {};
+    const urlsToFetch = new Set<string>();
+
+    for (const host in configsByHost) {
+      const bksAtHost = bookmarksByHost[host];
+      if (!bksAtHost) continue;
+
+      for (const config of configsByHost[host]) {
+        const regex = config.regexPattern ? new RegExp(config.regexPattern) : null;
+        const matchedAtHost = regex
+          ? bksAtHost.filter(bk => regex.test(bk.url!))
+          : bksAtHost;
+
+        for (const bk of matchedAtHost) {
+          matchedBookmarkIds.add(bk.id);
+          if (!bookmarkToConfigsMap[bk.id]) bookmarkToConfigsMap[bk.id] = [];
+          bookmarkToConfigsMap[bk.id].push(config.id);
+          if (bk.url) urlsToFetch.add(bk.url);
+        }
+      }
+    }
+
+    // Check which URLs have covers
+    const storageData = urlsToFetch.size > 0 ? await browser.storage.local.get(Array.from(urlsToFetch)) : {};
+    const coverExistsMap: Record<string, boolean> = {};
+
+    for (const url of urlsToFetch) {
+      const raw = storageData[url];
+      if (raw && ((Array.isArray(raw) && raw.length > 0) || (typeof raw === "string" && raw.startsWith("data:")))) {
+        coverExistsMap[url] = true;
+      } else {
+        coverExistsMap[url] = false;
+      }
+    }
+
+    const matchState: MatchState = {
+      matchedBookmarkIds: Array.from(matchedBookmarkIds),
+      bookmarkToConfigsMap,
+      coverExistsMap,
+    };
+
+    await browser.storage.local.set({ [MATCH_STATE_KEY]: matchState });
+    logger.info("[Background] Match state computed and saved.");
+
+  } catch (error) {
+    logger.error("[Background] Failed to compute match state", error);
+  }
+}
+
+function triggerMatchStateCompute() {
+  if (matchStateDebounceTimer) clearTimeout(matchStateDebounceTimer);
+  matchStateDebounceTimer = setTimeout(() => {
+    computeAndSaveMatchState();
+  }, 1000); // 1s debounce
+}
+
 // ========== MAIN BACKGROUND LOGIC ==========
 
 let isFetchStopped = false;
@@ -481,6 +599,7 @@ export default defineBackground(() => {
       await testAddBookmarks();
       openUI();
     }
+    triggerMatchStateCompute();
   })();
 
   browser.runtime.onMessage.addListener(async (message) => {
@@ -586,6 +705,7 @@ export default defineBackground(() => {
   });
 
   browser.bookmarks.onCreated.addListener(async (id, bookmark) => {
+    triggerMatchStateCompute();
     if (!bookmark.url) return;
     const matched = await getMatchedConfigForUrl(bookmark.url);
     if (!matched) return;
@@ -604,15 +724,30 @@ export default defineBackground(() => {
     }
   });
  
+  browser.bookmarks.onChanged.addListener(triggerMatchStateCompute);
+  browser.bookmarks.onRemoved.addListener(triggerMatchStateCompute);
+  browser.bookmarks.onMoved.addListener(triggerMatchStateCompute);
+ 
   async function setupUI() {
     const settings = (await browser.storage.local.get(SETTINGS_KEY))[SETTINGS_KEY] as Setting;
     const actionAPI = browser.action || browser.browserAction;
     if (actionAPI) await actionAPI.setPopup({ popup: settings?.clickAction === "options" ? "" : "popup.html" });
   }
 
-  browser.runtime.onInstalled.addListener(setupUI);
-  browser.runtime.onStartup.addListener(setupUI);
+  browser.runtime.onInstalled.addListener(() => {
+    setupUI();
+    triggerMatchStateCompute();
+  });
+  browser.runtime.onStartup.addListener(() => {
+    setupUI();
+    triggerMatchStateCompute();
+  });
   const actionAPI = browser.action || browser.browserAction;
   if (actionAPI) actionAPI.onClicked.addListener(openUI);
-  browser.storage.onChanged.addListener((changes, area) => { if (area === "local" && changes[SETTINGS_KEY]) setupUI(); });
+  browser.storage.onChanged.addListener((changes, area) => { 
+    if (area === "local") {
+      if (changes[SETTINGS_KEY]) setupUI(); 
+      if (changes[CONFIGS_KEY]) triggerMatchStateCompute();
+    }
+  });
 });

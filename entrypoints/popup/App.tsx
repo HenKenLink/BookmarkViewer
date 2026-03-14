@@ -34,7 +34,7 @@ import { SortControls } from "@/entrypoints/global/components/SortControls";
 import { UrlFilterControls } from "@/entrypoints/global/components/UrlFilterControls";
 import { FavoriteFoldersBar } from "@/entrypoints/global/components/FavoriteFoldersBar";
 import { useDisplayBookmarks } from "../global/hooks/useDisplayBookmarks";
-
+import { MATCH_STATE_KEY } from "@/entrypoints/global/consts";
 
 const SIDEBAR_WIDTH = 200;
 
@@ -92,7 +92,7 @@ function PopupApp() {
   const getSetting = usePopupStore((s) => s.getSetting);
   const loadBookmarkTree = usePopupStore((s) => s.loadBookmarkTree);
   const loadFetchConfig = usePopupStore((s) => s.loadFetchConfig);
-  const matchBookmarks = usePopupStore((s) => s.matchBookmarks);
+  const loadMatchState = usePopupStore((s) => s.loadMatchState);
   const setting = usePopupStore((s) => s.setting);
   const matchedBookmarks = usePopupStore((s) => s.matchedBookmarks);
   const bookmarkList = usePopupStore((s) => s.bookmarkList);
@@ -110,8 +110,6 @@ function PopupApp() {
   const setLoadingBookmarks = usePopupStore((s) => s.setLoadingBookmarks);
   const sidebarOpen = usePopupStore((s) => s.sidebarOpen);
   const setSidebarOpen = usePopupStore((s) => s.setSidebarOpen);
-  const updateLoadedImageMap = usePopupStore((s) => s.updateLoadedImageMap);
-  const loadSingleThumb = usePopupStore((s) => s.loadSingleThumb);
   const setSetting = usePopupStore((s) => s.setSetting);
 
   const [searchQuery, setSearchQuery] = useState("");
@@ -120,7 +118,7 @@ function PopupApp() {
   const theme = mode === "light" ? lightTheme : darkTheme;
 
   // Identify folders that contain matched bookmarks in their subtree
-  const { displayItems } = useDisplayBookmarks(
+  const { displayItems: displayList } = useDisplayBookmarks(
     bookmarkTree,
     matchedBookmarks,
     bookmarkMap,
@@ -131,23 +129,31 @@ function PopupApp() {
     bookmarkToConfigsMap
   );
 
-  const displayList = useMemo(() => displayItems, [displayItems]);
-
   // Reset limit when folder or search changes
   useEffect(() => {
     setRenderedLimit(25);
   }, [selectedFolderId, searchQuery, selectedConfigGroupId]);
 
   const loadMoreRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (isLoadingBookmarks || !scrollRef.current) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && renderedLimit < displayList.length) {
-          setRenderedLimit((prev) => prev + 25);
+          // Use a small delay to let the UI settle and prevent infinite recursion loops
+          setTimeout(() => {
+            setRenderedLimit((prev) => Math.min(prev + 25, displayList.length));
+          }, 32);
         }
       },
-      { threshold: 0.1, rootMargin: "200px" }
+      { 
+        root: scrollRef.current, 
+        threshold: 0.1, 
+        rootMargin: "100px" 
+      }
     );
 
     if (loadMoreRef.current) {
@@ -155,7 +161,7 @@ function PopupApp() {
     }
 
     return () => observer.disconnect();
-  }, [displayList.length, renderedLimit]);
+  }, [displayList.length, renderedLimit, isLoadingBookmarks]);
 
   const [activeTabStatus, setActiveTabStatus] = useState<{
     url: string;
@@ -169,9 +175,10 @@ function PopupApp() {
     const init = async () => {
       setLoadingBookmarks(true);
       try {
-        // Parallelize initialization for faster popup opening
+        // Parallelize initial data fetch (settings, bookmark tree, fetch configs)
         await Promise.all([getSetting(), loadBookmarkTree(), loadFetchConfig()]);
-        await matchBookmarks();
+        // Load match state only after bookmark tree is ready to avoid mapping fails
+        await loadMatchState();
       } finally {
         setLoadingBookmarks(false);
       }
@@ -179,25 +186,16 @@ function PopupApp() {
     init();
   }, []);
 
-  // Reload and re-match when user changes bookmarks (keep consistent with Viewer)
+  // Listen to match state changes from background
   useEffect(() => {
-    const reloadTree = async () => {
-      await loadBookmarkTree();
-      await matchBookmarks();
+    const handleStorageChange = (changes: browser.storage.ChangeDict, areaName: string) => {
+      if (areaName === "local" && changes[MATCH_STATE_KEY]) {
+        loadMatchState(); // Reload the pre-computed match state
+      }
     };
-
-    browser.bookmarks.onCreated.addListener(reloadTree);
-    browser.bookmarks.onChanged.addListener(reloadTree);
-    browser.bookmarks.onRemoved.addListener(reloadTree);
-    browser.bookmarks.onMoved.addListener(reloadTree);
-
-    return () => {
-      browser.bookmarks.onCreated.removeListener(reloadTree);
-      browser.bookmarks.onChanged.removeListener(reloadTree);
-      browser.bookmarks.onRemoved.removeListener(reloadTree);
-      browser.bookmarks.onMoved.removeListener(reloadTree);
-    };
-  }, [loadBookmarkTree, matchBookmarks]);
+    browser.storage.onChanged.addListener(handleStorageChange);
+    return () => browser.storage.onChanged.removeListener(handleStorageChange);
+  }, [loadMatchState]);
 
   useEffect(() => {
     setMode(setting.darkMode ? "dark" : "light");
@@ -207,9 +205,6 @@ function PopupApp() {
   useEffect(() => {
     const listener = (message: any) => {
       if (message.type === messageId.singleThumbFinished) {
-        // Reload image for this page URL using shared logic
-        loadSingleThumb(message.pageUrl);
-        
         // Update active tab status if matches
         if (activeTabStatus?.url === message.pageUrl) {
           setActiveTabStatus(prev => prev ? { ...prev, hasCover: true, isFetching: false } : null);
@@ -227,7 +222,7 @@ function PopupApp() {
     };
     browser.runtime.onMessage.addListener(listener);
     return () => browser.runtime.onMessage.removeListener(listener);
-  }, [activeTabStatus, loadSingleThumb]);
+  }, [activeTabStatus, bookmarkMap]);
 
   // Detect active tab and its status
   useEffect(() => {
@@ -238,27 +233,32 @@ function PopupApp() {
       const url = tab.url;
       let matchedConfig: FetchConfig | undefined;
       
-      const parsedUrl = new URL(url);
-      const hostname = parsedUrl.hostname;
+      try {
+        const parsedUrl = new URL(url);
+        const hostname = parsedUrl.hostname;
 
-      for (const config of fetchConfigList) {
-        let configHostname = config.hostname;
-        if (configHostname.includes("://")) {
-          try { configHostname = new URL(configHostname).hostname; } catch (_) {}
-        }
-        if (hostname === configHostname) {
-          if (config.regexPattern) {
-            const regex = new RegExp(config.regexPattern);
-            if (!regex.test(url)) continue;
+        for (const config of fetchConfigList) {
+          let configHostname = config.hostname;
+          if (configHostname.includes("://")) {
+            try { configHostname = new URL(configHostname).hostname; } catch (_) {}
           }
-          matchedConfig = config;
-          break;
+          if (hostname === configHostname) {
+            if (config.regexPattern) {
+              const regex = new RegExp(config.regexPattern);
+              if (!regex.test(url)) continue;
+            }
+            matchedConfig = config;
+            break;
+          }
         }
+      } catch (e) {
+        // Invalid URL
+        return;
       }
 
       if (matchedConfig) {
         const result = await browser.storage.local.get(url);
-        const hasCover = result[url] && Array.isArray(result[url]) && result[url].length > 0;
+        const hasCover = result[url] && (Array.isArray(result[url]) ? result[url].length > 0 : !!result[url]);
         
         // Query background for active fetch status
         let isFetching = false;
@@ -511,6 +511,7 @@ function PopupApp() {
 
             {/* Bookmark List */}
             <Box
+              ref={scrollRef}
               sx={{
                 flex: 1,
                 overflowY: "auto",

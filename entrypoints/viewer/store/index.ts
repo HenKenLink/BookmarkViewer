@@ -5,12 +5,12 @@ import {
   FetchConfig,
   FetchTask,
   BookmarkFetchItem,
-  LoadedImageMap,
+  MatchState,
 } from "../../global/types";
 import { getAllBookmarksInFolder, createFetchTasksForBookmarks } from "../utils/folderUtils";
 import { downloadThumbnailAsFile, uploadThumbnailFile, downloadMultipleThumbnails } from "../utils/thumbnailUtils";
 import { messageId } from "../../global/message";
-import { SETTINGS_KEY, CONFIGS_KEY } from "../../global/consts";
+import { SETTINGS_KEY, CONFIGS_KEY, MATCH_STATE_KEY } from "../../global/consts";
 import { BookmarkSlice, createBookmarkSlice } from "../../global/store/bookmarkSlice";
 
 type ViewerStoreState = {
@@ -23,7 +23,6 @@ type ViewerStoreState = {
 };
 
 type ViewerStoreAction = {
-  clearLoadedImageMap: () => void;
   setFetchStatus: (isFetching: boolean, total?: number) => void;
   updateFetchProgress: (progress: number) => void;
   stopFetching: () => void;
@@ -50,13 +49,6 @@ export const actionSlice: StateCreator<Store, [], [], ViewerStoreAction> = (
   set,
   get
 ) => ({
-  clearLoadedImageMap: () => {
-    const currentMap = get().loadedImageMap;
-    Object.values(currentMap).forEach((blobUrl) => {
-      if (blobUrl) URL.revokeObjectURL(blobUrl);
-    });
-    set(() => ({ loadedImageMap: {} }));
-  },
   setFetchStatus: (isFetching, total) => {
     set((state) => ({
       isFetching,
@@ -118,15 +110,25 @@ export const actionSlice: StateCreator<Store, [], [], ViewerStoreAction> = (
     }
   },
   downloadThumbnail: async (bookmarkId: string) => {
-    const blobUrl = get().loadedImageMap[bookmarkId];
-    if (!blobUrl) {
-      throw new Error('No thumbnail available for this bookmark');
-    }
-
     const bookmark = get().bookmarkMap[bookmarkId];
-    const filename = `${bookmark.title || 'bookmark'}_thumb.jpg`;
+    if (!bookmark || !bookmark.url) {
+      throw new Error('Invalid bookmark');
+    }
+    const storageData = await browser.storage.local.get(bookmark.url);
+    const raw = storageData[bookmark.url];
+    if (!raw) throw new Error('No thumbnail available for this bookmark');
+    
+    let blobUrl = "";
+    if (Array.isArray(raw)) {
+      blobUrl = URL.createObjectURL(new Blob([new Uint8Array(raw)], { type: "image/jpeg" }));
+    } else if (typeof raw === "string" && raw.startsWith("data:")) {
+      blobUrl = raw;
+    }
+    if (!blobUrl) throw new Error('Invalid thumbnail data');
 
+    const filename = `${bookmark.title || 'bookmark'}_thumb.jpg`;
     await downloadThumbnailAsFile(blobUrl, filename);
+    if (blobUrl.startsWith("blob:")) URL.revokeObjectURL(blobUrl);
   },
   uploadThumbnail: async (bookmarkId: string, file: File) => {
     const bookmark = get().bookmarkMap[bookmarkId];
@@ -134,39 +136,66 @@ export const actionSlice: StateCreator<Store, [], [], ViewerStoreAction> = (
       throw new Error('Invalid bookmark');
     }
 
-    const blobUrl = await uploadThumbnailFile(file, bookmark.url);
-
-    // Update the loaded image map
-    get().updateLoadedImageMap({ [bookmarkId]: blobUrl });
+    await uploadThumbnailFile(file, bookmark.url);
+    get().updateCoverExistsMap({ [bookmark.url]: true });
   },
   downloadMultipleThumbnailsAction: async (bookmarkIds: string[]) => {
-    const loadedImageMap = get().loadedImageMap;
     const bookmarkMap = get().bookmarkMap;
+    const coverExistsMap = get().coverExistsMap;
 
-    const thumbnails = bookmarkIds
-      .filter(id => loadedImageMap[id])
-      .map(id => ({
-        blobUrl: loadedImageMap[id],
-        filename: `${bookmarkMap[id]?.title || 'bookmark'}_thumb.jpg`,
-      }));
+    const bookmarks = bookmarkIds
+      .filter(id => {
+         const bk = bookmarkMap[id];
+         return bk && bk.url && coverExistsMap[bk.url];
+      })
+      .map(id => bookmarkMap[id]);
+
+    if (bookmarks.length === 0) {
+      throw new Error('No thumbnails available for selected bookmarks');
+    }
+    
+    const urlsToFetch = bookmarks.map(bk => bk.url!);
+    const storageData = await browser.storage.local.get(urlsToFetch);
+    const thumbnails = [];
+    
+    for (const bk of bookmarks) {
+      const raw = storageData[bk.url!];
+      if (raw) {
+         let blobUrl = "";
+         if (Array.isArray(raw)) blobUrl = URL.createObjectURL(new Blob([new Uint8Array(raw)], { type: "image/jpeg" }));
+         else if (typeof raw === "string" && raw.startsWith("data:")) blobUrl = raw;
+         if (blobUrl) {
+           thumbnails.push({
+             blobUrl,
+             filename: `${bk.title || 'bookmark'}_thumb.jpg`,
+           });
+         }
+      }
+    }
 
     if (thumbnails.length === 0) {
       throw new Error('No thumbnails available for selected bookmarks');
     }
 
     await downloadMultipleThumbnails(thumbnails);
+    thumbnails.forEach(t => { if (t.blobUrl.startsWith("blob:")) URL.revokeObjectURL(t.blobUrl); });
   },
   clearAllCovers: async () => {
     const all = await browser.storage.local.get(null);
     const keys = Object.keys(all);
 
-    const keysToRemove = keys.filter(key => key !== SETTINGS_KEY && key !== CONFIGS_KEY);
+    const keysToRemove = keys.filter(key => key !== SETTINGS_KEY && key !== CONFIGS_KEY && key !== MATCH_STATE_KEY);
 
     if (keysToRemove.length > 0) {
       await browser.storage.local.remove(keysToRemove);
     }
 
-    get().clearLoadedImageMap();
+    const matchStateRaw = await browser.storage.local.get(MATCH_STATE_KEY);
+    const matchState = matchStateRaw[MATCH_STATE_KEY] as MatchState | undefined;
+    if (matchState) {
+      matchState.coverExistsMap = {};
+      await browser.storage.local.set({ [MATCH_STATE_KEY]: matchState });
+    }
   },
   toggleFavoriteFolder: (id: string) => {
     const currentFavorites = get().setting.favoriteFolderIds || [];
@@ -209,12 +238,10 @@ export const actionSlice: StateCreator<Store, [], [], ViewerStoreAction> = (
     }
 
     await browser.storage.local.set({ [CONFIGS_KEY]: newConfigList });
-    await get().matchBookmarks();
   },
   importConfigList: async (newConfigList) => {
     set(() => ({ fetchConfigList: newConfigList }));
     await browser.storage.local.set({ [CONFIGS_KEY]: newConfigList });
-    await get().matchBookmarks();
   },
   setFetchConfig: async (newConfig, isUpdate) => {
     let newConfigList: FetchConfig[] = [];
@@ -235,7 +262,6 @@ export const actionSlice: StateCreator<Store, [], [], ViewerStoreAction> = (
       fetchConfigList: newConfigList,
     }));
     await browser.storage.local.set({ [CONFIGS_KEY]: newConfigList });
-    await get().matchBookmarks();
   },
 });
 
