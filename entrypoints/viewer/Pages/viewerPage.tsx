@@ -225,10 +225,15 @@ export function ViewerPage() {
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (isLoadingBookmarks) return;
+
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && renderedLimit < displayItems.length) {
-          setRenderedLimit((prev) => prev + 30);
+          // Use a small delay to let the UI settle and prevent infinite recursion loops
+          setTimeout(() => {
+            setRenderedLimit((prev) => Math.min(prev + 30, displayItems.length));
+          }, 32);
         }
       },
       { threshold: 0.1, rootMargin: "400px" }
@@ -239,7 +244,7 @@ export function ViewerPage() {
     }
 
     return () => observer.disconnect();
-  }, [displayItems.length, renderedLimit]);
+  }, [displayItems.length, renderedLimit, isLoadingBookmarks]);
 
   useEffect(() => {
     browser.runtime.onMessage.addListener(onMessageListener);
